@@ -1,10 +1,7 @@
-# Third-party native source checkouts
+# External native dependencies
 
-This directory is reserved for reviewed, pinned upstream source trees. Do not copy unpinned snapshots into release builds.
+CMake FetchContent downloads pinned upstream source revisions into this directory's build cache:
+- ggml-org/llama.cpp at 9c003a97ab34a69cc49243f9b02014038205ffae
+- ggml-org/whisper.cpp at 868e55578ea5f69550c046da22aefe11dc6e04c0
 
-Expected layout:
-- llama.cpp/
-- whisper.cpp/
-- piper/
-
-The CMake project currently supports optional llama.cpp and whisper.cpp subdirectories. Piper requires a separate ONNX Runtime Android integration and is not yet built by this project. See docs/native-build.md.
+Do not vendor model weights here. Piper/sherpa-onnx is a separate future integration.

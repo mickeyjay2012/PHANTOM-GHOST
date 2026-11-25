@@ -1,6 +1,6 @@
 package com.phantom.ghost.audio
 
-/** Whisper expects mono 16 kHz PCM. Capture permission and AudioRecord lifecycle belong to the UI/service layer. */
+/** Whisper expects mono 16 kHz PCM. AudioRecord should provide signed PCM16 samples. */
 class WhisperEngine(private val native: WhisperNative = JniWhisperNative()) {
     fun load(modelPath: String): Boolean = native.loadModel(modelPath)
     fun transcribe(buffer: AudioRingBuffer): String {
@@ -8,6 +8,7 @@ class WhisperEngine(private val native: WhisperNative = JniWhisperNative()) {
         require(samples.isNotEmpty()) { "No audio captured." }
         return native.transcribe(samples)
     }
+    companion object { const val REQUIRED_SAMPLE_RATE_HZ = 16_000 }
 }
 
 interface WhisperNative {

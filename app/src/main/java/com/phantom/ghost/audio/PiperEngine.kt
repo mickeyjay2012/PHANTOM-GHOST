@@ -7,13 +7,13 @@ import android.media.AudioTrack
 data class PiperVoice(val id: String, val modelFile: String, val configFile: String)
 object VoiceCatalog {
     val voices = listOf(
-        PiperVoice("en_US-lessac-medium", "en_US-lessac-medium.onnx", "en_US-lessac-medium.onnx.json"),
-        PiperVoice("en_GB-alan-medium", "en_GB-alan-medium.onnx", "en_GB-alan-medium.onnx.json"),
-        PiperVoice("en_US-amy-medium", "en_US-amy-medium.onnx", "en_US-amy-medium.onnx.json")
+        PiperVoice("en_US-lessac-low", "en_US-lessac-low.onnx", "en_US-lessac-low.onnx.json"),
+        PiperVoice("en_GB-alan-low", "en_GB-alan-low.onnx", "en_GB-alan-low.onnx.json"),
+        PiperVoice("en_US-amy-low", "en_US-amy-low.onnx", "en_US-amy-low.onnx.json")
     )
 }
 
-/** Adapter contract for Piper's ONNX runtime. It reports unavailable until the native Piper/ONNX build is supplied. */
+/** Adapter contract only; this class requires a real Piper/sherpa-onnx backend before use. */
 class PiperEngine(private val native: PiperNative = UnavailablePiperNative()) {
     fun synthesize(text: String, voice: PiperVoice): ShortArray {
         require(text.isNotBlank() && text.length <= 4000)
@@ -23,7 +23,7 @@ class PiperEngine(private val native: PiperNative = UnavailablePiperNative()) {
 interface PiperNative { fun synthesize(text: String, voice: PiperVoice): ShortArray }
 private class UnavailablePiperNative : PiperNative {
     override fun synthesize(text: String, voice: PiperVoice): ShortArray =
-        error("Piper runtime is not built yet. Add the Piper and ONNX Runtime Android dependencies first.")
+        error("Piper runtime is not integrated in this build.")
 }
 
 class TtsPlayer {

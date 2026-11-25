@@ -1,26 +1,40 @@
 #include <jni.h>
-#include <string>
 
-static jstring message(JNIEnv* env, const char* value) { return env->NewStringUTF(value); }
+static jstring toJavaString(JNIEnv * env, const char * value) {
+    return env->NewStringUTF(value);
+}
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_phantom_ghost_ai_NativeBridge_nativeRuntimeStatus(JNIEnv* env, jobject) {
-#ifdef PHANTOM_WITH_LLAMA
-    return message(env, "llama.cpp enabled; Whisper status depends on build flags.");
+Java_com_phantom_ghost_ai_NativeBridge_nativeRuntimeStatus(JNIEnv * env, jobject) {
+#if defined(PHANTOM_LLAMA_AVAILABLE) && defined(PHANTOM_WHISPER_AVAILABLE)
+    return toJavaString(env, "llama.cpp and whisper.cpp linked; JNI inference adapter pending validation.");
+#elif defined(PHANTOM_LLAMA_AVAILABLE)
+    return toJavaString(env, "llama.cpp linked; Whisper backend unavailable. JNI inference adapter pending validation.");
+#elif defined(PHANTOM_WHISPER_AVAILABLE)
+    return toJavaString(env, "whisper.cpp linked; Llama backend unavailable. JNI inference adapter pending validation.");
 #else
-    return message(env, "JNI loaded; llama.cpp and whisper.cpp sources are not initialized. See docs/native-build.md.");
+    return toJavaString(env, "Native inference libraries are not linked.");
 #endif
 }
 
+// Deliberately fail closed until JNI model/context lifecycle and cancellation are implemented
+// against the pinned upstream API and exercised on physical ARM hardware.
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_phantom_ghost_ai_NativeBridge_nativeLoadLlama(JNIEnv* env, jobject, jstring) { return JNI_FALSE; }
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_phantom_ghost_ai_NativeBridge_nativeGenerate(JNIEnv* env, jobject, jstring, jint, jfloat, jfloat, jfloat) {
-    return message(env, "Llama backend is not linked in this build.");
+Java_com_phantom_ghost_ai_NativeBridge_nativeLoadLlama(JNIEnv *, jobject, jstring) {
+    return JNI_FALSE;
 }
-extern "C" JNIEXPORT jboolean JNICALL
-Java_com_phantom_ghost_ai_NativeBridge_nativeLoadWhisper(JNIEnv* env, jobject, jstring) { return JNI_FALSE; }
+
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_phantom_ghost_ai_NativeBridge_nativeTranscribe(JNIEnv* env, jobject, jshortArray) {
-    return message(env, "Whisper backend is not linked in this build.");
+Java_com_phantom_ghost_ai_NativeBridge_nativeGenerate(JNIEnv * env, jobject, jstring, jint, jfloat, jfloat, jfloat) {
+    return toJavaString(env, "Llama JNI generation adapter is not yet enabled in this build.");
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_phantom_ghost_ai_NativeBridge_nativeLoadWhisper(JNIEnv *, jobject, jstring) {
+    return JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_phantom_ghost_ai_NativeBridge_nativeTranscribe(JNIEnv * env, jobject, jshortArray) {
+    return toJavaString(env, "Whisper JNI transcription adapter is not yet enabled in this build.");
 }

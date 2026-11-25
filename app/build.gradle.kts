@@ -4,23 +4,32 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.kapt")
 }
+val requestedAbi = providers.gradleProperty("targetAbi").orNull
 android {
     namespace = "com.phantom.ghost"
     compileSdk = 35
+    ndkVersion = "25.2.9519653"
     defaultConfig {
         applicationId = "com.phantom.ghost"
         minSdk = 28
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk { abiFilters += if (requestedAbi == null) listOf("arm64-v8a") else listOf(requestedAbi) }
         externalNativeBuild { cmake { cppFlags += "-std=c++17" } }
     }
     buildTypes { release { isMinifyEnabled = false; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") } }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
-    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+            arguments += listOf("-DPHANTOM_WITH_LLAMA=ON", "-DPHANTOM_WITH_WHISPER=ON")
+        }
+    }
 }
 kapt { correctErrorTypes = true }
 dependencies {

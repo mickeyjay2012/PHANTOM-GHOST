@@ -1,42 +1,61 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(phantom_native LANGUAGES C CXX)
+include(FetchContent)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Android's toolchain must configure every dependency. ExternalProject_Add commonly
-# creates a second host build and is intentionally not used here.
-option(PHANTOM_WITH_LLAMA "Build llama.cpp from external/llama.cpp" OFF)
-option(PHANTOM_WITH_WHISPER "Build whisper.cpp from external/whisper.cpp" OFF)
+option(PHANTOM_WITH_LLAMA "Fetch and build llama.cpp" ON)
+option(PHANTOM_WITH_WHISPER "Fetch and build whisper.cpp" ON)
+
+set(FETCHCONTENT_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../../external/_deps" CACHE PATH "" FORCE)
+set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
+set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
+set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
+set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
+set(GGML_CUDA OFF CACHE BOOL "" FORCE)
+set(GGML_METAL OFF CACHE BOOL "" FORCE)
+set(GGML_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GGML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(WHISPER_NO_COREML ON CACHE BOOL "" FORCE)
+set(WHISPER_NO_METAL ON CACHE BOOL "" FORCE)
+
+if(ANDROID_ABI STREQUAL "armeabi-v7a")
+    add_compile_options(-mfpu=neon)
+elseif(ANDROID_ABI STREQUAL "arm64-v8a")
+    # NEON/ASIMD is mandatory for AArch64; GGML selects supported kernels at runtime.
+endif()
+
+if(PHANTOM_WITH_LLAMA)
+    FetchContent_Declare(llama_cpp
+        GIT_REPOSITORY https://github.com/ggml-org/llama.cpp.git
+        GIT_TAG 9c003a97ab34a69cc49243f9b02014038205ffae
+        GIT_SHALLOW FALSE)
+    FetchContent_MakeAvailable(llama_cpp)
+endif()
+
+if(PHANTOM_WITH_WHISPER)
+    FetchContent_Declare(whisper_cpp
+        GIT_REPOSITORY https://github.com/ggml-org/whisper.cpp.git
+        GIT_TAG 868e55578ea5f69550c046da22aefe11dc6e04c0
+        GIT_SHALLOW FALSE)
+    FetchContent_MakeAvailable(whisper_cpp)
+endif()
 
 add_library(phantom_native SHARED phantom_native.cpp)
 find_library(log-lib log)
 target_link_libraries(phantom_native PRIVATE ${log-lib})
 
-if(ANDROID_ABI STREQUAL "arm64-v8a" OR ANDROID_ABI STREQUAL "armeabi-v7a")
-    target_compile_options(phantom_native PRIVATE -O3)
-endif()
-
-if(PHANTOM_WITH_LLAMA)
-    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/llama.cpp/CMakeLists.txt")
-        message(FATAL_ERROR "PHANTOM_WITH_LLAMA=ON but external/llama.cpp is missing. See docs/native-build.md.")
-    endif()
-    set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
-    add_subdirectory(external/llama.cpp)
-    target_compile_definitions(phantom_native PRIVATE PHANTOM_WITH_LLAMA=1)
+if(TARGET llama)
     target_link_libraries(phantom_native PRIVATE llama)
+    target_compile_definitions(phantom_native PRIVATE PHANTOM_LLAMA_AVAILABLE=1)
 endif()
-
-if(PHANTOM_WITH_WHISPER)
-    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/whisper.cpp/CMakeLists.txt")
-        message(FATAL_ERROR "PHANTOM_WITH_WHISPER=ON but external/whisper.cpp is missing. See docs/native-build.md.")
-    endif()
-    set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    add_subdirectory(external/whisper.cpp)
+if(TARGET whisper)
     target_link_libraries(phantom_native PRIVATE whisper)
+    target_compile_definitions(phantom_native PRIVATE PHANTOM_WHISPER_AVAILABLE=1)
 endif()
-
-# Piper is not a single self-contained Android target: it requires ONNX Runtime,
-# espeak-ng data and voice assets. It remains a separately versioned adapter.
