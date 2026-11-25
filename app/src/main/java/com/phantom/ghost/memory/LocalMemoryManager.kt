@@ -58,7 +58,7 @@ class LocalMemoryManager(context: Context, private val embedder: LocalEmbedder) 
         for (i in a.indices) { dot += a[i] * b[i]; aa += a[i] * a[i]; bb += b[i] * b[i] }
         return if (aa == 0.0 || bb == 0.0) 0f else (dot / (sqrt(aa) * sqrt(bb))).toFloat()
     }
-    private fun FloatArray.toBytes() = java.nio.ByteBuffer.allocate(size * 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).also { b -> forEach(b::putFloat) }.array()
+    private fun FloatArray.toBytes() = java.nio.ByteBuffer.allocate(size * 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).also { b -> forEach { value -> b.putFloat(value) } }.array()
     private fun ByteArray.toFloats(): FloatArray {
         val b = java.nio.ByteBuffer.wrap(this).order(java.nio.ByteOrder.LITTLE_ENDIAN)
         return FloatArray(size / 4) { b.float }
