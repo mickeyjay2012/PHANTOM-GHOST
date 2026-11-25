@@ -1,60 +1,47 @@
 # ༒︎ PHANTOM GHOST ༒︎
-### Intelligence Beyond the Ordinary.
 
-An Android AI-assistant project built around a futuristic, privacy-conscious interface and modular on-device intelligence.
+**Intelligence Beyond the Ordinary.**
 
-## Design system
-- Obsidian Black `#0A0A0A`
-- Charcoal `#121212`
-- Neon Cyan `#00F0FF`
-- Phantom Purple `#9D00FF`
-- Soft White `#E0E0E0`
+PHANTOM GHOST is an Android edge-AI assistant project built with Kotlin, Jetpack Compose and the Android NDK. This repository contains the Android application foundation and integration adapters for local language, speech, memory and user-approved actions.
 
-## Current implementation status
+## Implementation status
 
-The first source milestone contains:
-- Android application foundation using Kotlin and Jetpack Compose.
-- A minimal C++ JNI/NDK bridge.
-- An assistant interface with a demo response adapter.
-- A bounded in-process conversation buffer.
-- A conservative read-only tool allowlist.
-- A GitHub Actions Android build workflow.
+| Component | Status |
+|---|---|
+| Android / Compose foundation | Scaffold present |
+| Model download + SHA-256 verification | Implemented |
+| Foreground model download notification | Implemented |
+| Llama Kotlin generation facade | Implemented; native inference backend not linked |
+| Whisper PCM ring buffer + energy VAD | Implemented; native inference backend not linked |
+| Piper voice catalog + AudioTrack player | Adapter only; Piper/ONNX backend not linked |
+| Room conversation + vector persistence | Implemented; local cosine ranking, not FAISS |
+| ONNX embedding model | Not included; provide a tested LocalEmbedder |
+| Android action executor | Allow-listed intents only; no shell execution |
+| Native CMake | Optional dependency switches; upstream sources not vendored |
+| APK / native build verification | Not yet verified |
 
-**Important:** the chat screen is currently a UI demo, not a functioning AI model. llama.cpp, Whisper.cpp, Piper TTS, persistent semantic memory, and Android automation remain planned integrations. No model weights are included.
+## Model downloads
 
-## Project structure
+Model files are not bundled in the APK or Git. ModelManager requires an HTTPS URL and a pinned 64-character SHA-256 digest. Obtain model files from their official publishers and comply with each model's license.
 
-```
-app/src/main/java/com/phantom/ghost/
-  ai/       Assistant contract, demo adapter, tool policy, JNI wrapper
-  memory/   In-process conversation buffer
-app/src/main/cpp/ Native bridge
-.github/workflows/ Android CI
-```
+A Llama 3 8B Q4_K_M model is several gigabytes and may exceed the memory budget of many phones once Android and the KV cache are included. Start with a smaller instruct model for initial device testing.
 
-## Build requirements
-- Android Studio and Android SDK 35
-- JDK 17
-- Android NDK 27.2.12479018
-- CMake 3.22.1
-- Gradle 8.11.1
+## Native dependencies
 
-Open the project in Android Studio and sync Gradle. With Android SDK tools configured, run `gradle assembleDebug` and `gradle testDebugUnitTest`.
-
-## Roadmap
-- [x] Compose app foundation
-- [x] JNI/NDK starter bridge
-- [x] Assistant contract and demo adapter
-- [x] In-memory conversation buffer
-- [x] Initial CI workflow
-- [ ] llama.cpp model runtime and model download guidance
-- [ ] Whisper.cpp speech recognition
-- [ ] Piper text-to-speech
-- [ ] Persistent local retrieval memory
-- [ ] Permission-gated, user-confirmed Android actions
-- [ ] Device testing and release packaging
+See docs/native-build.md. The CMake project is prepared for Android add_subdirectory integration of reviewed llama.cpp and whisper.cpp source checkouts. Piper requires a separate ONNX Runtime Android integration and voice assets.
 
 ## Privacy and safety
-Keep model files and personal data out of source control. Request permissions only when needed and explain why. Cross-app actions must be visible, user-authorized, allowlisted, and confirmed before consequential changes. Never commit API keys, signing keys, passwords, or private model data.
 
-See [LICENSE](LICENSE). Third-party runtimes and model weights may have separate licenses.
+- Microphone capture must be started with runtime permission and visible user feedback.
+- Cross-app launching requires user confirmation.
+- No arbitrary shell execution, credential extraction or hidden app control is provided.
+- Conversation and vector data are stored locally in the app database.
+- Keep model weights, signing keys and secrets out of Git.
+
+## Design
+
+Obsidian Black #0A0A0A, Charcoal #121212, Neon Cyan #00F0FF, Phantom Purple #9D00FF, and Soft White #E0E0E0.
+
+## Build
+
+Open the repository in Android Studio with JDK 17. Install Android SDK 35, Android NDK and CMake 3.22.1. Run ./gradlew assembleDebug. Native inference is unavailable until upstream sources are added and the JNI implementation is completed and tested.
