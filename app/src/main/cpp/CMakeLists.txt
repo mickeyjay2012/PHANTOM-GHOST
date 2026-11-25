@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(phantom_native LANGUAGES CXX)
+add_library(phantom_native SHARED phantom_native.cpp)
+find_library(log-lib log)
+target_compile_features(phantom_native PRIVATE cxx_std_17)
+target_link_libraries(phantom_native ${log-lib})
