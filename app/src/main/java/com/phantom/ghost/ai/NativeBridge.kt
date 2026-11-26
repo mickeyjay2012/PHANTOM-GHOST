@@ -14,8 +14,8 @@ object NativeBridge {
     @Volatile private var activeSink: SendChannel<String>? = null
 
     fun runtimeStatus(): String = if (loaded) {
-        runCatching { nativeRuntimeStatus() }.getOrElse { "Native JNI entry point unavailable: \${it.javaClass.simpleName}" }
-    } else "Native runtime unavailable: \${loadError?.javaClass?.simpleName ?: "load error"}"
+        runCatching { nativeRuntimeStatus() }.getOrElse { "Native JNI entry point unavailable: ${it.javaClass.simpleName}" }
+    } else "Native runtime unavailable: ${loadError?.javaClass?.simpleName ?: "load error"}"
 
     fun loadModel(path: String): Boolean = loaded && runCatching { nativeLoadLlama(path) }.getOrDefault(false)
     fun loadWhisperModel(path: String): Boolean = loaded && runCatching { nativeLoadWhisper(path) }.getOrDefault(false)
