@@ -251,6 +251,10 @@ Java_com_phantom_ghost_ai_NativeBridge_nativeTranscribe(JNIEnv *env, jobject, js
     }
     const jsize count = env->GetArrayLength(pcm);
     if (count <= 0) return javaString(env, "");
+    if (count > 480000) {
+        throwJava(env, "java/lang/IllegalArgumentException", "Voice input exceeds the 30-second capture limit.");
+        return nullptr;
+    }
     jshort *raw = env->GetShortArrayElements(pcm, nullptr);
     if (!raw) return nullptr;
     std::vector<float> samples(static_cast<size_t>(count));

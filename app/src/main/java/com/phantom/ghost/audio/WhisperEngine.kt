@@ -3,8 +3,9 @@ package com.phantom.ghost.audio
 /** Whisper expects mono 16 kHz PCM. AudioRecord should provide signed PCM16 samples. */
 class WhisperEngine(private val native: WhisperNative = JniWhisperNative()) {
     fun load(modelPath: String): Boolean = native.loadModel(modelPath)
-    fun transcribe(buffer: AudioRingBuffer): String {
-        val samples = buffer.snapshot()
+    fun transcribe(buffer: AudioRingBuffer): String = transcribeSamples(buffer.snapshot())
+
+    fun transcribeSamples(samples: ShortArray): String {
         require(samples.isNotEmpty()) { "No audio captured." }
         return native.transcribe(samples)
     }

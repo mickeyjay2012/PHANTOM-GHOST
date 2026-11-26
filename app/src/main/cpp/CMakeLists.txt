@@ -35,6 +35,8 @@ if(PHANTOM_WITH_LLAMA)
         GIT_SHALLOW FALSE)
     FetchContent_MakeAvailable(llama_cpp)
 endif()
+# Keep the Whisper source pinned to a known JNI-compatible revision. A floating master fallback
+# is deliberately avoided: upstream API drift can break native builds without warning.
 if(PHANTOM_WITH_WHISPER)
     FetchContent_Declare(whisper_cpp
         GIT_REPOSITORY https://github.com/ggml-org/whisper.cpp.git

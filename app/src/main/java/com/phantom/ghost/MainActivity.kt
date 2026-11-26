@@ -1,21 +1,34 @@
 package com.phantom.ghost
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import com.phantom.ghost.ui.*
 import com.phantom.ghost.ai.LlamaEngine
 import com.phantom.ghost.ai.TokenCounter
 import com.phantom.ghost.ai.ConversationSummarizer
+import com.phantom.ghost.ai.PersonaMode
+import com.phantom.ghost.audio.AudioRecorder
+import com.phantom.ghost.audio.WhisperEngine
+import com.phantom.ghost.audio.WhisperModelManager
 import com.phantom.ghost.model.ModelManager
 import com.phantom.ghost.model.ModelStatus
+import com.phantom.ghost.voice.MainAssistantViewModel
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -27,17 +40,28 @@ class MainActivity : ComponentActivity() {
                 turns.joinToString(" ") { "${it.role}: ${it.content}" }.take(1400)
             }
         )
-        val modelManager = ModelManager(applicationContext)
-        setContent { PhantomGhostApp(engine, modelManager) }
+        val models = ModelManager(applicationContext)
+        val voiceVm = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                MainAssistantViewModel(engine, WhisperEngine(), WhisperModelManager(applicationContext), AudioRecorder()) as T
+        })[MainAssistantViewModel::class.java]
+        setContent { PhantomGhostApp(engine, models, voiceVm) }
     }
 }
 
 @Composable
-private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager) {
+private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voiceVm: MainAssistantViewModel) {
+    val context = LocalContext.current
     val modelStatus by modelManager.modelState.collectAsState()
     val downloadProgress by modelManager.downloadProgress.collectAsState()
     val modelError by modelManager.lastError.collectAsState()
+    val voiceState by voiceVm.state.collectAsState()
     val scope = rememberCoroutineScope()
+    var pendingPersona by remember { mutableStateOf(PersonaMode.STANDARD) }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) voiceVm.startListening(pendingPersona)
+    }
     LaunchedEffect(modelManager) { modelManager.checkModelPresence() }
     var screen by remember { mutableStateOf(PhantomScreen.ASSISTANT) }
     var showAction by remember { mutableStateOf(false) }
@@ -45,9 +69,7 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager) {
     PhantomDesignSystem {
         Surface(Modifier.fillMaxSize(), color=PhantomColors.PhantomBlack) {
             Column(Modifier.fillMaxSize().background(PhantomColors.PhantomBlack)) {
-                if (screen != PhantomScreen.ASSISTANT && showBanner) {
-                    SmartNotificationBanner("PHANTOM GHOST is standing by.") { showBanner=false }
-                }
+                if (screen != PhantomScreen.ASSISTANT && showBanner) SmartNotificationBanner("PHANTOM GHOST is standing by.") { showBanner=false }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     when(screen) {
                         PhantomScreen.ONBOARDING -> OnboardingScreen { screen=PhantomScreen.VOICE }
@@ -65,30 +87,31 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager) {
                                 ModelStatus.LOADED, ModelStatus.ACTIVE -> "Neural core ready"
                                 ModelStatus.ERROR -> "Model error · open SYSTEM"
                             },
+                            voiceState=voiceState,
+                            onStartListening={ mode ->
+                                pendingPersona=mode
+                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) voiceVm.startListening(mode)
+                                else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                            },
+                            onStopListening={voiceVm.stopListening()},
                             onSend={input, mode -> engine.generateResponse(input, mode)}
                         )
                         PhantomScreen.MEMORY -> MemoryProfileScreen()
                         PhantomScreen.MODELS -> ModelManagerScreen(
-                            status = modelStatus,
-                            progress = downloadProgress,
-                            error = modelError,
-                            onDownloadOrLoad = {
+                            status=modelStatus, progress=downloadProgress, error=modelError,
+                            whisperModelLabel=voiceState.activeWhisperModel,
+                            onDownloadOrLoad={
                                 scope.launch {
                                     runCatching {
-                                        when (modelStatus) {
+                                        when(modelStatus) {
                                             ModelStatus.READY -> modelManager.loadModel(engine)
-                                            ModelStatus.NOT_FOUND, ModelStatus.ERROR -> {
-                                                modelManager.downloadModel()
-                                                modelManager.loadModel(engine)
-                                            }
+                                            ModelStatus.NOT_FOUND, ModelStatus.ERROR -> { modelManager.downloadModel(); modelManager.loadModel(engine) }
                                             else -> Unit
                                         }
                                     }
                                 }
                             },
-                            onForceRedownload = {
-                                scope.launch { modelManager.forceRedownload() }
-                            }
+                            onForceRedownload={scope.launch { modelManager.forceRedownload() }}
                         )
                     }
                 }
@@ -106,8 +129,7 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager) {
                                 label={Text(label,style=PhantomType.label,fontSize=8.sp)},
                                 colors=NavigationBarItemDefaults.colors(
                                     selectedIconColor=PhantomColors.GhostCyan,selectedTextColor=PhantomColors.GhostCyan,
-                                    indicatorColor=PhantomColors.GhostCyan.copy(alpha=.10f),
-                                    unselectedTextColor=PhantomColors.Muted))
+                                    indicatorColor=PhantomColors.GhostCyan.copy(alpha=.10f),unselectedTextColor=PhantomColors.Muted))
                         }
                     }
                 }

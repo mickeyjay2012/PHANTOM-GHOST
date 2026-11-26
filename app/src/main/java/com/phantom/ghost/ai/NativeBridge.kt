@@ -52,8 +52,10 @@ object NativeBridge {
         activeSink.get()?.trySend(token)
     }
 
+    /** Accepts mono signed PCM16 samples at 16 kHz. */
     fun transcribe(samples: ShortArray): String {
         check(loaded) { runtimeStatus() }
+        require(samples.isNotEmpty()) { "No PCM samples supplied to Whisper." }
         return nativeTranscribe(samples)
     }
 
