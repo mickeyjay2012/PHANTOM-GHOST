@@ -23,8 +23,8 @@ data class GenerationConfig(
 }
 
 data class ChatTurn(val role: String, val content: String)
-interface TokenCounter { suspend fun count(text: String): Int }
-interface ConversationSummarizer { suspend fun summarize(messages: List<ChatTurn>): String }
+fun interface TokenCounter { suspend fun count(text: String): Int }
+fun interface ConversationSummarizer { suspend fun summarize(messages: List<ChatTurn>): String }
 interface LlamaNative {
     fun loadModel(path: String): Boolean
     fun generate(prompt: String, config: GenerationConfig): Flow<String>
