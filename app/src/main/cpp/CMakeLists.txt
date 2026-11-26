@@ -7,8 +7,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(PHANTOM_WITH_LLAMA "Fetch and build llama.cpp" ON)
 option(PHANTOM_WITH_WHISPER "Fetch and build whisper.cpp" ON)
-
-set(FETCHCONTENT_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../../external/_deps" CACHE PATH "" FORCE)
+set(FETCHCONTENT_BASE_DIR "\${CMAKE_CURRENT_LIST_DIR}/../../../../external/_deps" CACHE PATH "" FORCE)
 set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
@@ -27,8 +26,6 @@ set(WHISPER_NO_METAL ON CACHE BOOL "" FORCE)
 
 if(ANDROID_ABI STREQUAL "armeabi-v7a")
     add_compile_options(-mfpu=neon)
-elseif(ANDROID_ABI STREQUAL "arm64-v8a")
-    # NEON/ASIMD is mandatory for AArch64; GGML selects supported kernels at runtime.
 endif()
 
 if(PHANTOM_WITH_LLAMA)
@@ -38,7 +35,6 @@ if(PHANTOM_WITH_LLAMA)
         GIT_SHALLOW FALSE)
     FetchContent_MakeAvailable(llama_cpp)
 endif()
-
 if(PHANTOM_WITH_WHISPER)
     FetchContent_Declare(whisper_cpp
         GIT_REPOSITORY https://github.com/ggml-org/whisper.cpp.git
@@ -49,8 +45,7 @@ endif()
 
 add_library(phantom_native SHARED phantom_native.cpp)
 find_library(log-lib log)
-target_link_libraries(phantom_native PRIVATE ${log-lib})
-
+target_link_libraries(phantom_native PRIVATE \${log-lib})
 if(TARGET llama)
     target_link_libraries(phantom_native PRIVATE llama)
     target_compile_definitions(phantom_native PRIVATE PHANTOM_LLAMA_AVAILABLE=1)

@@ -1,26 +1,17 @@
-# Security and integration status
+# PHANTOM GHOST integration status
 
-This commit adds application-layer foundations, not a production-ready identity or AI service.
+## Native integration in this revision
 
-## Neural core
-- PersonaManager supplies the PHANTOM GHOST style prompt. It does not bypass safety, permission or privacy controls.
-- SlidingWindowContext enforces a token budget and delegates older turns to a user-partitioned archive adapter.
-- The existing JNI llama.cpp bridge still reports inference as unavailable. Real token-by-token native callbacks, model compatibility testing and on-device profiling remain required.
+- llama.cpp and whisper.cpp are built from pinned upstream commits and linked into the JNI shared library when the corresponding CMake targets are available.
+- Llama model loading creates a 2048-token context and retries context allocation at 1024 and 512 tokens. This does not recover from every allocator failure or OS process kill.
+- Llama generation tokenizes the prompt, evaluates it with llama_decode, samples output tokens, and calls the Kotlin callback incrementally. Cancellation is cooperative between decode steps.
+- Whisper accepts mono 16 kHz signed PCM16 samples and calls whisper_full.
+- Room compiler/runtime are upgraded to 2.7.2 to resolve the Kotlin 2.1 metadata incompatibility seen in CI.
 
-## Authentication
-- DevMockAuthRepository is an in-memory development scaffold. Its random session value is an opaque development token, NOT a JWT.
-- The mock verification mailer is injected. A local development mail sink may display codes only in a debug build.
-- Production requires Firebase Auth or Supabase Auth, server-side email verification, secure token refresh/revocation and backend authorization. Never trust a client-issued token for server access.
+## Not yet production-complete
 
-## Voice privacy
-- VoiceIsolator compares caller-supplied 256-dimensional embeddings. It does not record or store samples and no speaker-embedding model is bundled.
-- Voice matching is spoofable and must never be the only authentication factor or authorize sensitive actions.
-- Enrollment must be opt-in, explain biometric processing, keep embeddings encrypted on-device, support deletion, and require a separate device credential for sensitive operations.
-
-## Android actions
-- Actions must remain allow-listed, user-visible and confirmed where they affect other apps.
-- Accessibility and notification access are not enabled by this scaffold. If later added, they must be optional, user-enabled in Android settings, narrowly scoped and clearly disclosed.
-- Background calendar/battery monitoring requires explicit permissions and user controls.
-
-## Release gate
-Do not publish a production APK until native inference, real auth, database user partitioning/encryption, voice model provenance, accessibility review, automated tests and physical-device testing are complete.
+- No speaker embedding model is bundled. A licensed ONNX model and its exact tensor contract must be selected before real speaker embedding inference or enrollment can be implemented.
+- No biometric voiceprint is stored. The cosine utility alone is not speaker isolation or identity verification.
+- Supabase auth, token storage, notification access, AccessibilityService, calendar monitoring, and background scheduling are not implemented in this native-only revision.
+- Native inference must still pass CI and be tested on physical ARM devices with real model files. The callback stream and latency are not yet device-validated.
+- No model is downloaded automatically. Model source, license, SHA-256 and memory-tier checks are required.
