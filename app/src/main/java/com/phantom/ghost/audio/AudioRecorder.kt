@@ -38,7 +38,7 @@ class AudioRecorder(
             try {
                 while (isActive && !stopping.get()) {
                     val count = input.read(frame, 0, frame.size, AudioRecord.READ_BLOCKING)
-                    if (count < 0) error("AudioRecord read failed: $count")
+                    if (count < 0) {\n                        if (stopping.get() || !isActive) break\n                        error("AudioRecord read failed: $count")\n                    }
                     if (count > 0) {
                         val samples = frame.copyOf(count)
                         ring.append(samples)
