@@ -24,10 +24,10 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-35" "build-tools;35.0.0" "ndk;25.2.9519653" "cmake;3.22.1"
       - uses: gradle/actions/setup-gradle@v4
-      - name: Unit tests
-        run: gradle :app:testDebugUnitTest
-      - name: Build arm64 APK
-        run: gradle :app:assembleDebug
+      - name: Verify unit tests
+        run: gradle :app:testDebugUnitTest --stacktrace
+      - name: Build and verify app
+        run: gradle build --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: phantom-ghost-arm64-debug

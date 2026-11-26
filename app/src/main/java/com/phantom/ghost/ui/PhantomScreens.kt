@@ -110,9 +110,10 @@ fun OnboardingScreen(onContinue: () -> Unit) {
             for (x in 0..(size.width/gap).toInt()) for (y in 0..(size.height/gap).toInt())
                 drawCircle(PhantomColors.GhostCyan.copy(alpha=.10f), 1.1.dp.toPx(), Offset(x*gap,y*gap))
         }
+        val availableWidth = maxWidth
         Column(Modifier.fillMaxWidth(.88f).widthIn(max=460.dp).padding(18.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(22.dp)) {
-            PhantomOrb(size = if (maxWidth < 380.dp) 112.dp else 148.dp)
+            PhantomOrb(size = if (availableWidth < 380.dp) 112.dp else 148.dp)
             PhantomBrandHeader()
             Text("INTELLIGENCE BEYOND THE ORDINARY", style=PhantomType.label, color=PhantomColors.GhostCyan, textAlign=TextAlign.Center)
             GlassCard(Modifier.fillMaxWidth()) {
