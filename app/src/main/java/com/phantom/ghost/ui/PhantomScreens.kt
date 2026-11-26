@@ -78,13 +78,13 @@ fun PhantomMark(modifier: Modifier = Modifier) {
 fun PhantomOrb(size: Dp = 76.dp, state: AgentState = AgentState.IDLE, loading: Boolean = false) {
     val transition = rememberInfiniteTransition(label = "orb")
     val pulse by transition.animateFloat(0.82f, 1.08f,
-        infiniteRepeatable(tween(1450, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "pulse")
+        infiniteRepeatable(tween(if (state == AgentState.LISTENING) 420 else 1450, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "pulse")
     val color = when (state) {
         AgentState.LISTENING -> PhantomColors.GhostCyan
         AgentState.ACTING -> PhantomColors.PhantomPurple
         AgentState.IDLE -> Color(0xFF242B35)
     }
-    Box(Modifier.size(size).alpha(if (loading) pulse else 1f).glowEffect(color, 18.dp)
+    Box(Modifier.size(size).alpha(if (loading || state == AgentState.LISTENING) pulse else 1f).glowEffect(color, 18.dp)
         .clip(CircleShape).background(Brush.radialGradient(listOf(color.copy(alpha=.95f), color.copy(alpha=.12f), PhantomColors.PhantomBlack))),
         contentAlignment = Alignment.Center) {
         PhantomMark(Modifier.fillMaxSize(.68f))
@@ -182,6 +182,9 @@ fun MainAssistantScreen(
     onOpenModels: () -> Unit,
     canSend: Boolean = true,
     modelStatusLabel: String = "MODEL STATUS UNKNOWN",
+    voiceState: com.phantom.ghost.voice.VoiceUiState = com.phantom.ghost.voice.VoiceUiState(),
+    onStartListening: (PersonaMode) -> Unit = {},
+    onStopListening: () -> Unit = {},
     onSend: (String, PersonaMode) -> Flow<String>
 ) {
     var message by remember { mutableStateOf("") }
@@ -193,6 +196,12 @@ fun MainAssistantScreen(
     var state by remember { mutableStateOf(AgentState.IDLE) }
     val scope = rememberCoroutineScope()
     var generating by remember { mutableStateOf(false) }
+    LaunchedEffect(voiceState.response) {
+        if (voiceState.response.isNotBlank()) {
+            val line = "PHANTOM (VOICE): " + voiceState.response
+            if (entries.lastOrNull()?.startsWith("PHANTOM (VOICE): ") == true) entries[entries.lastIndex] = line else entries.add(line)
+        }
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxHeight < 700.dp || maxWidth < 360.dp
         Scaffold(containerColor=PhantomColors.PhantomBlack, bottomBar={}) { padding ->
@@ -202,13 +211,28 @@ fun MainAssistantScreen(
                     PhantomBrandHeader(compact=true)
                     StatusBadge("LOCAL CORE",PhantomColors.GhostCyan)
                 }
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
-                    Column { Text("THOUGHT STREAM",style=PhantomType.label,color=PhantomColors.PhantomPurple)
-                        Text(if (generating) "Generating response…" else if (canSend) "Ready when you are." else modelStatusLabel,
-                            color=if (canSend) PhantomColors.Muted else PhantomColors.GhostCyan,fontSize=12.sp) }
-                    PhantomOrb(48.dp,state=state,loading=generating)
+                val orbState = when {
+                    voiceState.listening -> AgentState.LISTENING
+                    generating || voiceState.transcribing || voiceState.preparing -> AgentState.ACTING
+                    else -> state
                 }
-                PersonaToggle(activePersonaMode, enabled = !generating) { activePersonaMode = it }
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+                    Column {
+                        Text("THOUGHT STREAM",style=PhantomType.label,color=PhantomColors.PhantomPurple)
+                        Text(when {
+                            voiceState.preparing -> "Preparing Whisper model…"
+                            voiceState.listening -> "LISTENING · Speak now"
+                            voiceState.transcribing -> "Transcribing audio…"
+                            generating -> "Generating response…"
+                            canSend -> "Ready when you are."
+                            else -> modelStatusLabel
+                        }, color=if (voiceState.listening) PhantomColors.GhostCyan else PhantomColors.Muted,fontSize=12.sp)
+                    }
+                    PhantomOrb(48.dp,state=orbState,loading=generating || voiceState.transcribing || voiceState.preparing)
+                }
+                PersonaToggle(activePersonaMode, enabled = !generating && !voiceState.listening && !voiceState.preparing) { activePersonaMode = it }
+                if (voiceState.transcript.isNotBlank()) LiveTranscriptText(voiceState.transcript)
+                if (voiceState.error != null) Text(voiceState.error,Modifier.fillMaxWidth().padding(top=6.dp),color=Color(0xFFFF8585),fontSize=12.sp)
                 LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top=10.dp,bottom=8.dp),
                     verticalArrangement=Arrangement.spacedBy(10.dp)) {
                     items(entries) { item -> ThoughtStreamItem(ThoughtKind.OBSERVATION,item) }
@@ -221,12 +245,19 @@ fun MainAssistantScreen(
                 Surface(Modifier.fillMaxWidth().padding(bottom=12.dp),shape=RoundedCornerShape(28.dp),
                     color=PhantomColors.PhantomCharcoal,border=androidx.compose.foundation.BorderStroke(1.dp,PhantomColors.GhostCyan.copy(alpha=.3f))) {
                     Row(Modifier.padding(horizontal=12.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically) {
-                        Text("🎙",fontSize=20.sp,color=PhantomColors.GhostCyan)
+                        if (voiceState.listening) {
+                            TextButton(onClick=onStopListening) { Text("STOP",color=Color(0xFFFF8585)) }
+                        } else {
+                            TextButton(
+                                enabled=canSend && !generating && !voiceState.preparing && !voiceState.transcribing,
+                                onClick={onStartListening(activePersonaMode)}
+                            ) { Text("🎙",fontSize=18.sp,color=PhantomColors.GhostCyan) }
+                        }
                         OutlinedTextField(value=message,onValueChange={message=it},modifier=Modifier.weight(1f),
-                            placeholder={Text("Hold to talk or type…",fontSize=13.sp)},singleLine=true,
+                            placeholder={Text("Type a message…",fontSize=13.sp)},singleLine=true,
                             colors=OutlinedTextFieldDefaults.colors(unfocusedBorderColor=Color.Transparent,focusedBorderColor=Color.Transparent))
                         TextButton(
-                            enabled = message.isNotBlank() && !generating && canSend,
+                            enabled = message.isNotBlank() && !generating && canSend && !voiceState.listening && !voiceState.transcribing,
                             onClick = {
                                 val input = message.trim()
                                 message = ""
@@ -255,6 +286,14 @@ fun MainAssistantScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun LiveTranscriptText(transcript: String) {
+    GlassCard(Modifier.fillMaxWidth().padding(top=8.dp)) {
+        Text("LIVE TRANSCRIPT",style=PhantomType.label,color=PhantomColors.GhostCyan)
+        Text(transcript,color=PhantomColors.GhostWhite,fontSize=13.sp,lineHeight=19.sp)
     }
 }
 
@@ -371,6 +410,7 @@ fun SmartNotificationBanner(text: String, onClick: () -> Unit) {
 fun ModelManagerScreen(
     status: com.phantom.ghost.model.ModelStatus,
     progress: Float,
+    whisperModelLabel: String = "Not loaded",
     error: String?,
     onDownloadOrLoad: () -> Unit,
     onForceRedownload: () -> Unit
@@ -419,6 +459,11 @@ fun ModelManagerScreen(
                     status != com.phantom.ghost.model.ModelStatus.VERIFYING) {
                 Text("FORCE RE-DOWNLOAD",color=PhantomColors.Muted)
             }
+        }
+        GlassCard(Modifier.fillMaxWidth()) {
+            Text("WHISPER / EARS",style=PhantomType.label,color=PhantomColors.GhostCyan)
+            Text(whisperModelLabel,color=PhantomColors.GhostWhite,fontSize=13.sp)
+            Text("English base is preferred; multilingual base is selected automatically if needed.",fontSize=11.sp,color=PhantomColors.Muted)
         }
         GlassCard(Modifier.fillMaxWidth()) {
             Text("CONTEXT WINDOW  ${context.toInt()} TOKENS",style=PhantomType.label,color=PhantomColors.GhostCyan)
