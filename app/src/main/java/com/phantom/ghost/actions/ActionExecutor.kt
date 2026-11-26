@@ -41,7 +41,17 @@ class ActionExecutor(private val context: Context) {
                     require(userConfirmed) { "Navigation requires user confirmation." }
                     val query = params.getString("query").trim()
                     require(query.isNotEmpty() && query.length <= 200) { "Invalid navigation query." }
-                    launch(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(query))))
+                    val targetPackage = params.optString("package_name").trim()
+                    if (targetPackage.isNotEmpty()) {
+                        require(PhantomAccessibilityService.requestSearchAfterUserConfirmation(targetPackage, query)) {
+                            "Accessibility navigation is unavailable, disabled, or the target app is not allow-listed."
+                        }
+                        val targetIntent = context.packageManager.getLaunchIntentForPackage(targetPackage)
+                            ?: error("Target app is not installed.")
+                        launch(targetIntent)
+                    } else {
+                        launch(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(query))))
+                    }
                 }
                 "set_alarm" -> {
                     require(userConfirmed) { "Setting an alarm requires user confirmation." }
