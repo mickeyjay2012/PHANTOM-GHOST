@@ -43,11 +43,12 @@ fun PhantomBrandHeader(compact: Boolean = false) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
         PhantomMark(Modifier.size(if (compact) 34.dp else 46.dp))
         Spacer(Modifier.width(10.dp))
-        Column {
-            Text("PHANTOM", color = PhantomColors.GhostWhite, fontSize = if (compact) 17.sp else 22.sp,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("PHANTOM", color = PhantomColors.GhostWhite, fontSize = if (compact) 16.sp else 21.sp,
+                fontWeight = FontWeight.Black, letterSpacing = 0.5.sp)
+            Spacer(Modifier.width(5.dp))
+            Text("GHOST", color = PhantomColors.GhostCyan, fontSize = if (compact) 16.sp else 21.sp,
                 fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-            Text("GHOST", color = PhantomColors.GhostCyan, fontSize = if (compact) 17.sp else 22.sp,
-                fontWeight = FontWeight.Black, letterSpacing = 2.sp)
         }
     }
 }
