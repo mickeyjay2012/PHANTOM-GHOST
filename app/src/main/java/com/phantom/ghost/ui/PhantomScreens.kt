@@ -180,6 +180,8 @@ fun MainAssistantScreen(
     onConfirmAction: () -> Unit,
     onOpenMemory: () -> Unit,
     onOpenModels: () -> Unit,
+    canSend: Boolean = true,
+    modelStatusLabel: String = "MODEL STATUS UNKNOWN",
     onSend: (String, PersonaMode) -> Flow<String>
 ) {
     var message by remember { mutableStateOf("") }
@@ -202,7 +204,8 @@ fun MainAssistantScreen(
                 }
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
                     Column { Text("THOUGHT STREAM",style=PhantomType.label,color=PhantomColors.PhantomPurple)
-                        Text(if (generating) "Generating response…" else "Ready when you are.",color=PhantomColors.Muted,fontSize=12.sp) }
+                        Text(if (generating) "Generating response…" else if (canSend) "Ready when you are." else modelStatusLabel,
+                            color=if (canSend) PhantomColors.Muted else PhantomColors.GhostCyan,fontSize=12.sp) }
                     PhantomOrb(48.dp,state=state,loading=generating)
                 }
                 PersonaToggle(activePersonaMode, enabled = !generating) { activePersonaMode = it }
@@ -223,7 +226,7 @@ fun MainAssistantScreen(
                             placeholder={Text("Hold to talk or type…",fontSize=13.sp)},singleLine=true,
                             colors=OutlinedTextFieldDefaults.colors(unfocusedBorderColor=Color.Transparent,focusedBorderColor=Color.Transparent))
                         TextButton(
-                            enabled = message.isNotBlank() && !generating,
+                            enabled = message.isNotBlank() && !generating && canSend,
                             onClick = {
                                 val input = message.trim()
                                 message = ""
@@ -365,34 +368,63 @@ fun SmartNotificationBanner(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun ModelManagerScreen() {
-    var context by remember { mutableFloatStateOf(2048f) }
+fun ModelManagerScreen(
+    status: com.phantom.ghost.model.ModelStatus,
+    progress: Float,
+    error: String?,
+    onDownloadOrLoad: () -> Unit,
+    onForceRedownload: () -> Unit
+) {
+    var context by remember { mutableFloatStateOf(1024f) }
+    val statusText = when (status) {
+        com.phantom.ghost.model.ModelStatus.NOT_FOUND -> "NOT FOUND"
+        com.phantom.ghost.model.ModelStatus.DOWNLOADING -> "DOWNLOADING · ${(progress * 100).toInt()}%"
+        com.phantom.ghost.model.ModelStatus.VERIFYING -> "VERIFYING SHA-256"
+        com.phantom.ghost.model.ModelStatus.READY -> "READY · NOT LOADED"
+        com.phantom.ghost.model.ModelStatus.LOADED -> "LOADED"
+        com.phantom.ghost.model.ModelStatus.ACTIVE -> "ACTIVE"
+        com.phantom.ghost.model.ModelStatus.ERROR -> "ERROR"
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        ScreenTitle("DEVICE / PERFORMANCE","System health","Lightweight controls for your device.")
-        GlassCard(Modifier.fillMaxWidth()) {
-            Text("RAM GAUGE",style=PhantomType.label,color=PhantomColors.GhostCyan)
-            Row(verticalAlignment=Alignment.CenterVertically) {
-                Box(Modifier.size(104.dp),contentAlignment=Alignment.Center) {
-                    CircularProgressIndicator(progress={.42f},modifier=Modifier.fillMaxSize(),color=PhantomColors.GhostCyan,
-                        trackColor=PhantomColors.GhostCyan.copy(alpha=.12f),strokeWidth=8.dp)
-                    Text("—",fontSize=24.sp,color=PhantomColors.GhostWhite)
-                }
-                Spacer(Modifier.width(18.dp)); Column {
-                    Text("Runtime memory",color=PhantomColors.GhostWhite,fontWeight=FontWeight.SemiBold)
-                    Text("Live device metrics will appear when the native runtime is connected.",fontSize=11.sp,color=PhantomColors.Muted)
-                }
-            }
-        }
+        ScreenTitle("DEVICE / PERFORMANCE","System health","Model files are stored in this app's private storage.")
         GlassCard(Modifier.fillMaxWidth()) {
             Text("MODEL STATUS",style=PhantomType.label,color=PhantomColors.GhostCyan)
-            Text("No verified model loaded",color=PhantomColors.GhostWhite,fontWeight=FontWeight.SemiBold)
-            Text("Recommended low-memory profile: compact quantized model.",fontSize=12.sp,color=PhantomColors.Muted)
+            Text(com.phantom.ghost.model.ModelManager.MODEL_NAME,color=PhantomColors.GhostWhite,fontWeight=FontWeight.SemiBold)
+            Spacer(Modifier.height(6.dp))
+            StatusBadge(statusText, if (status == com.phantom.ghost.model.ModelStatus.ERROR) Color.Red else PhantomColors.GhostCyan)
+            Text("Download size: approximately 2.02 GB · requires a stable connection and sufficient free storage.",
+                fontSize=12.sp,color=PhantomColors.Muted)
+            if (status == com.phantom.ghost.model.ModelStatus.DOWNLOADING || status == com.phantom.ghost.model.ModelStatus.VERIFYING) {
+                LinearProgressIndicator(progress={ if (status == com.phantom.ghost.model.ModelStatus.VERIFYING) 1f else progress },
+                    modifier=Modifier.fillMaxWidth(), color=PhantomColors.GhostCyan)
+            }
+            if (error != null) Text(error,color=Color(0xFFFF7777),fontSize=12.sp)
+            Spacer(Modifier.height(8.dp))
+            PhantomButton(
+                when (status) {
+                    com.phantom.ghost.model.ModelStatus.NOT_FOUND, com.phantom.ghost.model.ModelStatus.ERROR -> "DOWNLOAD MODEL"
+                    com.phantom.ghost.model.ModelStatus.READY -> "LOAD MODEL"
+                    com.phantom.ghost.model.ModelStatus.LOADED, com.phantom.ghost.model.ModelStatus.ACTIVE -> "MODEL LOADED"
+                    else -> "PLEASE WAIT"
+                },
+                Modifier.fillMaxWidth(),
+                enabled = status == com.phantom.ghost.model.ModelStatus.NOT_FOUND ||
+                    status == com.phantom.ghost.model.ModelStatus.ERROR ||
+                    status == com.phantom.ghost.model.ModelStatus.READY,
+                onClick = onDownloadOrLoad
+            )
+            OutlinedButton(onClick=onForceRedownload, modifier=Modifier.fillMaxWidth(),
+                enabled=status != com.phantom.ghost.model.ModelStatus.DOWNLOADING &&
+                    status != com.phantom.ghost.model.ModelStatus.VERIFYING) {
+                Text("FORCE RE-DOWNLOAD",color=PhantomColors.Muted)
+            }
         }
         GlassCard(Modifier.fillMaxWidth()) {
             Text("CONTEXT WINDOW  ${context.toInt()} TOKENS",style=PhantomType.label,color=PhantomColors.GhostCyan)
             Slider(value=context,onValueChange={context=it},valueRange=512f..2048f,steps=2)
-            PhantomButton("DOWNLOAD NEW MODEL",Modifier.fillMaxWidth(),onClick={})
+            Text("A 3B Q4 model can exceed available memory on some 4 GB devices. Loading is explicit; use a smaller model if Android reports memory pressure.",
+                fontSize=12.sp,color=PhantomColors.Muted)
         }
     }
 }

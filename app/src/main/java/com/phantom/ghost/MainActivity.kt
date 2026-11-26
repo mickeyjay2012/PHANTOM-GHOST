@@ -14,6 +14,9 @@ import com.phantom.ghost.ui.*
 import com.phantom.ghost.ai.LlamaEngine
 import com.phantom.ghost.ai.TokenCounter
 import com.phantom.ghost.ai.ConversationSummarizer
+import com.phantom.ghost.model.ModelManager
+import com.phantom.ghost.model.ModelStatus
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -24,12 +27,18 @@ class MainActivity : ComponentActivity() {
                 turns.joinToString(" ") { "${it.role}: ${it.content}" }.take(1400)
             }
         )
-        setContent { PhantomGhostApp(engine) }
+        val modelManager = ModelManager(applicationContext)
+        setContent { PhantomGhostApp(engine, modelManager) }
     }
 }
 
 @Composable
-private fun PhantomGhostApp(engine: LlamaEngine) {
+private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager) {
+    val modelStatus by modelManager.modelState.collectAsState()
+    val downloadProgress by modelManager.downloadProgress.collectAsState()
+    val modelError by modelManager.lastError.collectAsState()
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(modelManager) { modelManager.checkModelPresence() }
     var screen by remember { mutableStateOf(PhantomScreen.ASSISTANT) }
     var showAction by remember { mutableStateOf(false) }
     var showBanner by remember { mutableStateOf(true) }
@@ -47,10 +56,40 @@ private fun PhantomGhostApp(engine: LlamaEngine) {
                             onConfirmAction={showAction=true},
                             onOpenMemory={screen=PhantomScreen.MEMORY},
                             onOpenModels={screen=PhantomScreen.MODELS},
+                            canSend = modelStatus == ModelStatus.LOADED || modelStatus == ModelStatus.ACTIVE,
+                            modelStatusLabel = when (modelStatus) {
+                                ModelStatus.NOT_FOUND -> "Model not installed · open SYSTEM"
+                                ModelStatus.DOWNLOADING -> "Downloading model…"
+                                ModelStatus.VERIFYING -> "Verifying model…"
+                                ModelStatus.READY -> "Model verified · open SYSTEM to load"
+                                ModelStatus.LOADED, ModelStatus.ACTIVE -> "Neural core ready"
+                                ModelStatus.ERROR -> "Model error · open SYSTEM"
+                            },
                             onSend={input, mode -> engine.generateResponse(input, mode)}
                         )
                         PhantomScreen.MEMORY -> MemoryProfileScreen()
-                        PhantomScreen.MODELS -> ModelManagerScreen()
+                        PhantomScreen.MODELS -> ModelManagerScreen(
+                            status = modelStatus,
+                            progress = downloadProgress,
+                            error = modelError,
+                            onDownloadOrLoad = {
+                                scope.launch {
+                                    runCatching {
+                                        when (modelStatus) {
+                                            ModelStatus.READY -> modelManager.loadModel(engine)
+                                            ModelStatus.NOT_FOUND, ModelStatus.ERROR -> {
+                                                modelManager.downloadModel()
+                                                modelManager.loadModel(engine)
+                                            }
+                                            else -> Unit
+                                        }
+                                    }
+                                }
+                            },
+                            onForceRedownload = {
+                                scope.launch { modelManager.forceRedownload() }
+                            }
+                        )
                     }
                 }
                 if(screen != PhantomScreen.ASSISTANT) {

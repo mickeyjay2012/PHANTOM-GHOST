@@ -1,7 +1,11 @@
 package com.phantom.ghost.model
 
 import android.content.Context
+import com.phantom.ghost.ai.LlamaEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -9,60 +13,160 @@ import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 
-data class ModelSpec(val id: String, val fileName: String, val url: String, val sha256: String) {
-    init { require(sha256.matches(Regex("[a-fA-F0-9]{64}"))) { "A pinned SHA-256 is required." } }
+enum class ModelStatus { NOT_FOUND, DOWNLOADING, VERIFYING, READY, LOADED, ACTIVE, ERROR }
+
+data class ModelSpec(
+    val id: String,
+    val fileName: String,
+    val url: String,
+    val sha256: String,
+    val expectedBytes: Long
+) {
+    init {
+        require(url.startsWith("https://"))
+        require(sha256.matches(Regex("[a-fA-F0-9]{64}")))
+    }
 }
 
-class ModelManager(context: Context, private val client: OkHttpClient = OkHttpClient()) {
-    private val modelDir = File(context.getExternalFilesDir(null), "models").apply { mkdirs() }
+/**
+ * Downloads a pinned GGUF into app-private external storage, verifies its SHA-256,
+ * and only then permits the native engine to load it.
+ */
+class ModelManager(
+    context: Context,
+    private val client: OkHttpClient = OkHttpClient.Builder().build()
+) {
+    private val appContext = context.applicationContext
+    private val modelDirectory = File(appContext.getExternalFilesDir(null) ?: appContext.filesDir, "models")
+        .apply { mkdirs() }
 
-    fun localFile(spec: ModelSpec) = File(modelDir, spec.fileName)
-    fun isInstalled(spec: ModelSpec): Boolean = localFile(spec).let { it.isFile && sha256(it).equals(spec.sha256, true) }
+    private val _modelState = MutableStateFlow(ModelStatus.NOT_FOUND)
+    val modelState: StateFlow<ModelStatus> = _modelState.asStateFlow()
 
-    suspend fun download(spec: ModelSpec, onProgress: (Long, Long) -> Unit = { _, _ -> }): File =
-        withContext(Dispatchers.IO) {
-            require(spec.url.startsWith("https://")) { "Model downloads must use HTTPS." }
-            val destination = localFile(spec)
-            if (isInstalled(spec)) return@withContext destination
-            val partial = File(modelDir, "${spec.fileName}.part")
-            val response = client.newCall(Request.Builder().url(spec.url).build()).execute()
-            response.use { res ->
-                check(res.isSuccessful) { "Download failed: HTTP ${res.code}" }
-                val body = checkNotNull(res.body) { "Empty response body." }
-                val total = body.contentLength()
+    private val _downloadProgress = MutableStateFlow(0f)
+    val downloadProgress: StateFlow<Float> = _downloadProgress.asStateFlow()
+
+    private val _lastError = MutableStateFlow<String?>(null)
+    val lastError: StateFlow<String?> = _lastError.asStateFlow()
+
+    val modelFile: File get() = File(modelDirectory, DEFAULT_MODEL.fileName)
+
+    suspend fun checkModelPresence(): ModelStatus = withContext(Dispatchers.IO) {
+        _lastError.value = null
+        if (!modelFile.isFile) {
+            _modelState.value = ModelStatus.NOT_FOUND
+        } else {
+            _modelState.value = ModelStatus.VERIFYING
+            if (sha256(modelFile).equals(DEFAULT_MODEL.sha256, ignoreCase = true)) {
+                _modelState.value = ModelStatus.READY
+            } else {
+                modelFile.delete()
+                _modelState.value = ModelStatus.NOT_FOUND
+                _lastError.value = "Existing model failed SHA-256 verification and was removed."
+            }
+        }
+        _modelState.value
+    }
+
+    suspend fun downloadModel(): File = withContext(Dispatchers.IO) {
+        require(modelDirectory.exists() || modelDirectory.mkdirs()) { "Cannot create private model directory." }
+        _lastError.value = null
+        _downloadProgress.value = 0f
+        _modelState.value = ModelStatus.DOWNLOADING
+
+        val partial = File(modelDirectory, DEFAULT_MODEL.fileName + ".part")
+        val request = Request.Builder()
+            .url(DEFAULT_MODEL.url)
+            .header("User-Agent", "PHANTOM-GHOST-Android")
+            .build()
+
+        try {
+            client.newCall(request).execute().use { response ->
+                check(response.isSuccessful) { "Model download failed: HTTP ${response.code}." }
+                val body = checkNotNull(response.body) { "The model server returned an empty response." }
+                val total = body.contentLength().takeIf { it > 0 } ?: DEFAULT_MODEL.expectedBytes
                 body.byteStream().use { input ->
                     FileOutputStream(partial).use { output ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        var count: Int
+                        val buffer = ByteArray(1024 * 1024)
                         var received = 0L
-                        while (input.read(buffer).also { count = it } >= 0) {
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
                             if (count == 0) continue
                             output.write(buffer, 0, count)
                             received += count
-                            onProgress(received, total)
+                            _downloadProgress.value = (received.toFloat() / total.toFloat()).coerceIn(0f, 1f)
                         }
                         output.fd.sync()
                     }
                 }
             }
-            check(sha256(partial).equals(spec.sha256, true)) {
-                partial.delete()
-                "SHA-256 mismatch. The downloaded model was rejected."
+
+            _modelState.value = ModelStatus.VERIFYING
+            check(partial.length() == DEFAULT_MODEL.expectedBytes) {
+                "Downloaded file size does not match the pinned model artifact."
             }
-            check(partial.renameTo(destination)) { "Could not finalize model file." }
+            check(sha256(partial).equals(DEFAULT_MODEL.sha256, ignoreCase = true)) {
+                "SHA-256 verification failed. The model download was rejected."
+            }
+            val destination = modelFile
+            if (destination.exists()) destination.delete()
+            check(partial.renameTo(destination)) { "Could not move verified model into place." }
+            _downloadProgress.value = 1f
+            _modelState.value = ModelStatus.READY
             destination
+        } catch (error: Throwable) {
+            partial.delete()
+            _modelState.value = ModelStatus.ERROR
+            _lastError.value = error.message ?: error.javaClass.simpleName
+            throw error
         }
+    }
+
+    suspend fun loadModel(engine: LlamaEngine) {
+        check(_modelState.value == ModelStatus.READY || _modelState.value == ModelStatus.LOADED) {
+            "Download and verify the model before loading it."
+        }
+        try {
+            engine.load(modelFile.absolutePath)
+            _modelState.value = ModelStatus.LOADED
+            _lastError.value = null
+        } catch (error: Throwable) {
+            _modelState.value = ModelStatus.ERROR
+            _lastError.value = error.message ?: "Native model loading failed."
+            throw error
+        }
+    }
+
+    suspend fun forceRedownload() = withContext(Dispatchers.IO) {
+        modelFile.delete()
+        File(modelDirectory, DEFAULT_MODEL.fileName + ".part").delete()
+        _downloadProgress.value = 0f
+        _modelState.value = ModelStatus.NOT_FOUND
+        _lastError.value = null
+    }
 
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().buffered().use { input ->
             val buffer = ByteArray(1024 * 1024)
             while (true) {
-                val n = input.read(buffer)
-                if (n < 0) break
-                digest.update(buffer, 0, n)
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
             }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    companion object {
+        const val MODEL_NAME = "Llama 3.2 3B Instruct (Q4_K_M)"
+        val DEFAULT_MODEL = ModelSpec(
+            id = "llama-3.2-3b-instruct-q4_k_m",
+            fileName = "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+            url = "https://huggingface.co/pingappslab/Llama-3.2-3B-Instruct-GGUF/resolve/5ab33fa94d1d04e903623ae72c95d1696f09f9e8/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+            sha256 = "6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff",
+            expectedBytes = 2019377696L
+        )
     }
 }
