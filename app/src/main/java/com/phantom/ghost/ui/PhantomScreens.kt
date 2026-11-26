@@ -33,6 +33,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Dialog
+import com.phantom.ghost.ai.PersonaMode
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 enum class PhantomScreen { ONBOARDING, VOICE, ASSISTANT, MEMORY, MODELS }
 enum class AgentState { IDLE, LISTENING, ACTING }
@@ -175,15 +179,18 @@ fun WaveformIcon(modifier: Modifier = Modifier) {
 fun MainAssistantScreen(
     onConfirmAction: () -> Unit,
     onOpenMemory: () -> Unit,
-    onOpenModels: () -> Unit
+    onOpenModels: () -> Unit,
+    onSend: (String, PersonaMode) -> Flow<String>
 ) {
     var message by remember { mutableStateOf("") }
-    val entries = remember { listOf(
-        "Neural interface initialized. Local model status: awaiting verified model.",
-        "Thought stream is ready. Your messages remain on this device until configured otherwise.",
-        "Action permissions are user-controlled. I will ask before launching external actions."
+    var activePersonaMode by remember { mutableStateOf(PersonaMode.STANDARD) }
+    val entries = remember { mutableStateListOf(
+        "Neural interface initialized. Load a verified local GGUF model to begin inference.",
+        "Persona changes response style; they do not disable safety or permission checks."
     ) }
     var state by remember { mutableStateOf(AgentState.IDLE) }
+    val scope = rememberCoroutineScope()
+    var generating by remember { mutableStateOf(false) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxHeight < 700.dp || maxWidth < 360.dp
         Scaffold(containerColor=PhantomColors.PhantomBlack, bottomBar={}) { padding ->
@@ -195,9 +202,10 @@ fun MainAssistantScreen(
                 }
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
                     Column { Text("THOUGHT STREAM",style=PhantomType.label,color=PhantomColors.PhantomPurple)
-                        Text("Ready when you are.",color=PhantomColors.Muted,fontSize=12.sp) }
-                    PhantomOrb(48.dp,state=state)
+                        Text(if (generating) "Generating response…" else "Ready when you are.",color=PhantomColors.Muted,fontSize=12.sp) }
+                    PhantomOrb(48.dp,state=state,loading=generating)
                 }
+                PersonaToggle(activePersonaMode, enabled = !generating) { activePersonaMode = it }
                 LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top=10.dp,bottom=8.dp),
                     verticalArrangement=Arrangement.spacedBy(10.dp)) {
                     items(entries) { item -> ThoughtStreamItem(ThoughtKind.OBSERVATION,item) }
@@ -214,11 +222,71 @@ fun MainAssistantScreen(
                         OutlinedTextField(value=message,onValueChange={message=it},modifier=Modifier.weight(1f),
                             placeholder={Text("Hold to talk or type…",fontSize=13.sp)},singleLine=true,
                             colors=OutlinedTextFieldDefaults.colors(unfocusedBorderColor=Color.Transparent,focusedBorderColor=Color.Transparent))
-                        TextButton(onClick={ if(message.isNotBlank()) { state=AgentState.ACTING; message="" } }) { Text("SEND",color=PhantomColors.GhostCyan) }
+                        TextButton(
+                            enabled = message.isNotBlank() && !generating,
+                            onClick = {
+                                val input = message.trim()
+                                message = ""
+                                generating = true
+                                state = AgentState.ACTING
+                                entries.add("YOU: " + input)
+                                entries.add("")
+                                scope.launch {
+                                    val response = StringBuilder()
+                                    try {
+                                        onSend(input, activePersonaMode).collect { fragment ->
+                                            response.append(fragment)
+                                            entries[entries.lastIndex] = "PHANTOM: " + response.toString()
+                                        }
+                                        if (response.isEmpty()) entries[entries.lastIndex] = "No response was returned."
+                                    } catch (error: Throwable) {
+                                        entries[entries.lastIndex] = "CORE STATUS: " + (error.message ?: error.javaClass.simpleName)
+                                    } finally {
+                                        generating = false
+                                        state = AgentState.IDLE
+                                    }
+                                }
+                            }
+                        ) { Text("SEND",color=PhantomColors.GhostCyan) }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun PersonaToggle(mode: PersonaMode, enabled: Boolean = true, onModeChange: (PersonaMode) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp)
+            .glassCard().padding(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        val standardSelected = mode == PersonaMode.STANDARD
+        OutlinedButton(
+            onClick = { onModeChange(PersonaMode.STANDARD) },
+            enabled = enabled,
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp, if (standardSelected) PhantomColors.GhostWhite else PhantomColors.Muted.copy(alpha = .35f)
+            ),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = if (standardSelected) PhantomColors.GhostWhite.copy(alpha = .10f) else Color.Transparent
+            )
+        ) { Text("STANDARD", style = PhantomType.label, color = PhantomColors.GhostWhite) }
+        OutlinedButton(
+            onClick = { onModeChange(PersonaMode.UNRESTRICTED) },
+            enabled = enabled,
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp, if (!standardSelected) PhantomColors.GhostCyan else PhantomColors.PhantomPurple.copy(alpha = .45f)
+            ),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = if (!standardSelected) PhantomColors.PhantomPurple.copy(alpha = .18f) else Color.Transparent
+            )
+        ) { Text("UNRESTRICTED", style = PhantomType.label, color = PhantomColors.GhostCyan) }
     }
 }
 

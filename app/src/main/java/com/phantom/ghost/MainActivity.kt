@@ -11,16 +11,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phantom.ghost.ui.*
+import com.phantom.ghost.ai.LlamaEngine
+import com.phantom.ghost.ai.TokenCounter
+import com.phantom.ghost.ai.ConversationSummarizer
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { PhantomGhostApp() }
+        val engine = LlamaEngine(
+            tokenCounter = TokenCounter { text -> (text.length / 4).coerceAtLeast(1) },
+            summarizer = ConversationSummarizer { turns ->
+                turns.joinToString(" ") { "${it.role}: ${it.content}" }.take(1400)
+            }
+        )
+        setContent { PhantomGhostApp(engine) }
     }
 }
 
 @Composable
-private fun PhantomGhostApp() {
+private fun PhantomGhostApp(engine: LlamaEngine) {
     var screen by remember { mutableStateOf(PhantomScreen.ASSISTANT) }
     var showAction by remember { mutableStateOf(false) }
     var showBanner by remember { mutableStateOf(true) }
@@ -37,7 +46,8 @@ private fun PhantomGhostApp() {
                         PhantomScreen.ASSISTANT -> MainAssistantScreen(
                             onConfirmAction={showAction=true},
                             onOpenMemory={screen=PhantomScreen.MEMORY},
-                            onOpenModels={screen=PhantomScreen.MODELS}
+                            onOpenModels={screen=PhantomScreen.MODELS},
+                            onSend={input, mode -> engine.generateResponse(input, mode)}
                         )
                         PhantomScreen.MEMORY -> MemoryProfileScreen()
                         PhantomScreen.MODELS -> ModelManagerScreen()

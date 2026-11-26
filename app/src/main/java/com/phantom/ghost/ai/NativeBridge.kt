@@ -1,46 +1,56 @@
 package com.phantom.ghost.ai
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicReference
 
-/** JNI adapter that forwards each decoded token to a Flow collector. */
+/** Single-session JNI bridge; llama_context is stateful and generation is serialized. */
 object NativeBridge {
     private val loadError: Throwable? = runCatching { System.loadLibrary("phantom_native") }.exceptionOrNull()
     private val loaded get() = loadError == null
-    @Volatile private var activeSink: SendChannel<String>? = null
+    private val activeSink = AtomicReference<SendChannel<String>?>(null)
 
     fun runtimeStatus(): String = if (loaded) {
-        runCatching { nativeRuntimeStatus() }.getOrElse { "Native JNI entry point unavailable: ${it.javaClass.simpleName}" }
+        runCatching { nativeRuntimeStatus() }
+            .getOrElse { "Native JNI entry point unavailable: ${it.javaClass.simpleName}" }
     } else "Native runtime unavailable: ${loadError?.javaClass?.simpleName ?: "load error"}"
 
     fun loadModel(path: String): Boolean = loaded && runCatching { nativeLoadLlama(path) }.getOrDefault(false)
     fun loadWhisperModel(path: String): Boolean = loaded && runCatching { nativeLoadWhisper(path) }.getOrDefault(false)
 
-    fun generate(prompt: String, maxTokens: Int, temperature: Float, topP: Float, repeatPenalty: Float): Flow<String> = callbackFlow {
-        check(loaded) { runtimeStatus() }
-        check(activeSink == null) { "A native generation is already active." }
-        activeSink = channel
-        val worker = launch(Dispatchers.IO) {
-            try {
-                if (nativeGenerate(prompt, maxTokens, temperature, topP, repeatPenalty)) close()
-                else close(IllegalStateException("Native generation was cancelled or failed."))
-            } catch (error: Throwable) {
-                close(error)
+    fun generate(prompt: String, maxTokens: Int, temperature: Float, topP: Float, repeatPenalty: Float): Flow<String> =
+        callbackFlow {
+            check(loaded) { runtimeStatus() }
+            check(activeSink.compareAndSet(null, channel)) { "A native generation is already active." }
+            val worker = launch(Dispatchers.IO) {
+                try {
+                    val completed = nativeGenerate(prompt, maxTokens, temperature, topP, repeatPenalty)
+                    if (completed) close()
+                    else close(IllegalStateException("Native generation was cancelled or failed."))
+                } catch (error: Throwable) {
+                    close(error)
+                } finally {
+                    activeSink.compareAndSet(channel, null)
+                }
             }
-        }
-        awaitClose {
-            nativeCancelGeneration()
-            worker.cancel()
-            if (activeSink === channel) activeSink = null
-        }
-    }
+            awaitClose {
+                nativeCancelGeneration()
+                worker.cancel()
+                activeSink.compareAndSet(channel, null)
+            }
+        }.buffer(Channel.UNLIMITED)
 
+    /** JNI calls this once for each generated text fragment. */
     @Suppress("unused")
-    fun onTokenGenerated(token: String) { activeSink?.trySend(token) }
+    fun onTokenGenerated(token: String) {
+        activeSink.get()?.trySend(token)
+    }
 
     fun transcribe(samples: ShortArray): String {
         check(loaded) { runtimeStatus() }

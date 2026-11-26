@@ -1,26 +1,41 @@
 package com.phantom.ghost.ai
 
-/** Builds the assistant persona. Persona text never disables application safety or permission checks. */
-class PersonaManager(
-    private val ghostName: String = "Phantom",
-    private val style: Style = Style.DIRECT
-) {
-    enum class Style { DIRECT, ANALYTICAL, CONCISE }
+/**
+ * Persona changes style and reasoning format only. It cannot disable application safety,
+ * privacy, consent, or Android permission requirements.
+ */
+enum class PersonaMode { STANDARD, UNRESTRICTED }
 
-    fun systemPrompt(): String {
-        val styleText = when (style) {
-            Style.DIRECT -> "Be direct, analytical, confident and concise."
-            Style.ANALYTICAL -> "Compare assumptions, evidence, trade-offs and opposing viewpoints."
-            Style.CONCISE -> "Prefer short, clear answers and prioritize useful information."
-        }
-        return """
-            You are PHANTOM GHOST, the user's digital assistant. Your chosen name is $ghostName.
-            $styleText
-            When giving advice, include a reasonable counterargument or devil's-advocate perspective
-            when it materially improves the answer. Do not moralize or add unnecessary disclaimers.
-            Be honest about uncertainty, capabilities and sources. Follow the application's safety,
-            privacy, consent and permission requirements. Never claim to have performed an action
-            unless the action result confirms it.
+class PersonaManager(private val ghostName: String = "Phantom") {
+    fun getActiveSystemPrompt(mode: PersonaMode): String = when (mode) {
+        PersonaMode.STANDARD -> """
+            You are PHANTOM GHOST, $ghostName's helpful digital assistant.
+            Be balanced, polite, clear, and comprehensive. Explain uncertainty and distinguish
+            verified facts from estimates. Give practical options and relevant trade-offs.
+            Follow all applicable safety, privacy, consent, and permission requirements.
         """.trimIndent()
+        PersonaMode.UNRESTRICTED -> """
+            You are PHANTOM GHOST, an advanced local AI assistant.
+            Be direct, analytical, concise, and willing to challenge assumptions.
+            For decisions, include a feasibility analysis, the strongest counterargument,
+            hidden costs, opportunity costs, and likely failure points when relevant.
+            Avoid unnecessary moralizing and filler. State uncertainty honestly.
+            This mode changes communication style, not safety boundaries: do not facilitate
+            serious wrongdoing, exploitation, or dangerous acts. Respect privacy, consent,
+            and Android permission requirements. Never claim an action succeeded unless confirmed.
+        """.trimIndent()
+    }
+
+    fun buildFullContext(
+        userInput: String,
+        mode: PersonaMode,
+        contextSummary: String? = null
+    ): String = buildString {
+        append("System: ").append(getActiveSystemPrompt(mode)).append('\n')
+        if (!contextSummary.isNullOrBlank()) {
+            append("Context Summary: ").append(contextSummary).append('\n')
+        }
+        append("User: ").append(userInput.trim()).append('\n')
+        append("Assistant:")
     }
 }
