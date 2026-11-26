@@ -54,7 +54,7 @@ class LlamaEngine(
             userTurnsSinceSummary++
             compact(config.contextTokens, force = userTurnsSinceSummary >= 5)
             val prompt = buildString {
-                append("System: You are PHANTOM GHOST. You run on a 4GB device. Be concise. Use short sentences. Prioritize speed over verbosity.\n")
+                append("System: ").append(PersonaManager().systemPrompt()).append("\n")
                 history.forEach { append(it.role).append(": ").append(it.content).append('\n') }
                 append("assistant:")
             }

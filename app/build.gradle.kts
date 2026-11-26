@@ -27,7 +27,6 @@ android {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
-            arguments += listOf("-DPHANTOM_WITH_LLAMA=ON", "-DPHANTOM_WITH_WHISPER=ON")
         }
     }
 }

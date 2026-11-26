@@ -3,13 +3,15 @@ package com.phantom.ghost.actions
 import android.content.Context
 import android.content.Intent
 import android.os.BatteryManager
+import android.provider.AlarmClock
 import android.provider.Settings
+import android.net.Uri
 import org.json.JSONObject
 
 data class ActionResult(val ok: Boolean, val message: String)
 enum class AssistantMode { ACTIVE, PASSIVE_LOW_BATTERY }
 
-/** Visible, allow-listed intents only. No arbitrary shell or hidden cross-app actions. */
+/** Visible, allow-listed Android intents only. No arbitrary shell or hidden cross-app actions. */
 class ActionExecutor(private val context: Context) {
     fun currentMode(): AssistantMode {
         val battery = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
@@ -35,14 +37,32 @@ class ActionExecutor(private val context: Context) {
                         ?: error("App is not installed or has no launch activity.")
                     launch(intent)
                 }
+                "navigate_to" -> {
+                    require(userConfirmed) { "Navigation requires user confirmation." }
+                    val query = params.getString("query").trim()
+                    require(query.isNotEmpty() && query.length <= 200) { "Invalid navigation query." }
+                    launch(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(query))))
+                }
+                "set_alarm" -> {
+                    require(userConfirmed) { "Setting an alarm requires user confirmation." }
+                    val hour = params.getInt("hour")
+                    val minute = params.getInt("minute")
+                    require(hour in 0..23 && minute in 0..59) { "Invalid alarm time." }
+                    val intent = Intent(AlarmClock.ACTION_SET_ALARM)
+                        .putExtra(AlarmClock.EXTRA_HOUR, hour)
+                        .putExtra(AlarmClock.EXTRA_MINUTES, minute)
+                        .putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+                    launch(intent)
+                }
                 else -> error("Command is not allow-listed.")
             }
             else -> error("Action type is not allow-listed.")
         }
-        ActionResult(true, "Action completed.")
+        ActionResult(true, "Action handed to Android.")
     }.getOrElse { ActionResult(false, it.message ?: "Action rejected.") }
 
     private fun launch(intent: Intent) {
+        require(intent.resolveActivity(context.packageManager) != null) { "No compatible Android app is available." }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
     }
