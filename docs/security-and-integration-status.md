@@ -1,17 +1,27 @@
 # PHANTOM GHOST integration status
 
-## Native integration in this revision
+## Implemented in this revision
 
-- llama.cpp and whisper.cpp are built from pinned upstream commits and linked into the JNI shared library when the corresponding CMake targets are available.
-- Llama model loading creates a 2048-token context and retries context allocation at 1024 and 512 tokens. This does not recover from every allocator failure or OS process kill.
-- Llama generation tokenizes the prompt, evaluates it with llama_decode, samples output tokens, and calls the Kotlin callback incrementally. Cancellation is cooperative between decode steps.
-- Whisper accepts mono 16 kHz signed PCM16 samples and calls whisper_full.
-- Room compiler/runtime are upgraded to 2.7.2 to resolve the Kotlin 2.1 metadata incompatibility seen in CI.
+- Pinned llama.cpp and whisper.cpp native libraries with JNI model loading, Llama token streaming callbacks, cancellation, and Whisper transcription of mono 16 kHz PCM16.
+- Llama context allocation retries 2048, 1024, then 512 tokens. This cannot recover from an OS-level process kill or all native allocator failures.
+- Supabase Auth REST sign-up, six-digit signup OTP verification, password sign-in, refresh-token rotation, and sign-out.
+- Session tokens are encrypted at rest with AES-GCM and an Android Keystore key.
+- Room conversation and memory records are scoped by userId. The migration assigns legacy records to an empty user ID instead of exposing them to authenticated users.
+- Room 2.7.2 addresses the Kotlin 2.1 metadata incompatibility reported by CI.
 
-## Not yet production-complete
+## Configuration
 
-- No speaker embedding model is bundled. A licensed ONNX model and its exact tensor contract must be selected before real speaker embedding inference or enrollment can be implemented.
-- No biometric voiceprint is stored. The cosine utility alone is not speaker isolation or identity verification.
-- Supabase auth, token storage, notification access, AccessibilityService, calendar monitoring, and background scheduling are not implemented in this native-only revision.
-- Native inference must still pass CI and be tested on physical ARM devices with real model files. The callback stream and latency are not yet device-validated.
-- No model is downloaded automatically. Model source, license, SHA-256 and memory-tier checks are required.
+Provide Gradle properties or CI environment variables:
+- SUPABASE_URL=https://<project-ref>.supabase.co
+- SUPABASE_ANON_KEY=<public-anon-key>
+
+Configure Supabase email OTP templates/provider and enforce Row Level Security for all server tables. Never place a service-role key in the Android app.
+
+## Still incomplete / not claimed as production-ready
+
+- No licensed speaker-embedding ONNX model is selected or bundled. Without its known input/output tensor contract, voice enrollment and embedding extraction are not integrated. The existing cosine utility is not an embedding model or anti-spoofing system.
+- No voiceprint biometric database table or enrollment recorder exists yet.
+- No AccessibilityService or NotificationListenerService is enabled. A future navigation-only feature must be user-initiated and visible; arbitrary notification scraping is not enabled.
+- No proactive calendar/battery foreground polling service is installed. Use Doze-aware WorkManager scheduling and explicit calendar permission rather than a five-minute polling loop.
+- No model is downloaded automatically; model source, license, SHA-256, and memory-tier preflight remain required.
+- Native inference is not yet device-validated. CI and physical ARM testing must pass before release.
