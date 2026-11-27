@@ -207,7 +207,10 @@ class LocalMemoryManager(
         val candidates = dao.candidateMemories(profileId)
         val ranked = candidates.mapNotNull { memory ->
             val vector = memory.embeddingBlob.toFloats()
-            if (vector.size != EmbeddingEngine.DIMENSIONS) return@mapNotNull null
+            if (vector.size != EmbeddingEngine.DIMENSIONS || vector.any { !it.isFinite() }) return@mapNotNull null
+            val vectorMagnitude = sqrt(vector.sumOf { it.toDouble() * it.toDouble() })
+            // Dot product is cosine similarity only when both vectors are L2-normalized.
+            if (!vectorMagnitude.isFinite() || vectorMagnitude !in 0.999..1.001) return@mapNotNull null
             val similarity = vector.indices.sumOf { vector[it].toDouble() * queryVector[it].toDouble() }.toFloat()
             if (!similarity.isFinite()) null else memory to similarity.coerceIn(-1f, 1f)
         }.filter { it.second > 0.20f }.sortedByDescending { it.second }.take(limit.coerceIn(1, 10))

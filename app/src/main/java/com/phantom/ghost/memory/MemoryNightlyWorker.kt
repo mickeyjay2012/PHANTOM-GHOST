@@ -91,6 +91,10 @@ class MemoryNightlyWorker(
                     for (fact in facts) {
                         val vector = embedder.embed(fact)
                         check(vector.size == EmbeddingEngine.DIMENSIONS && vector.all { it.isFinite() })
+                        val magnitude = kotlin.math.sqrt(vector.sumOf { it.toDouble() * it.toDouble() })
+                        check(magnitude.isFinite() && magnitude in 0.999..1.001) {
+                            "Embedding output must be L2-normalized before it is stored."
+                        }
                         embeddings += fact to vector.toBytes()
                     }
                 }

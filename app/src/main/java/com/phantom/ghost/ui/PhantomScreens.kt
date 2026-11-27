@@ -219,7 +219,8 @@ fun MainAssistantScreen(
     LaunchedEffect(voiceState.thoughtEvents) {
         voiceState.thoughtEvents.lastOrNull()?.let { event ->
             if (event != lastThoughtEvent) {
-                entries.add("VOICE / TTS · $event")
+                val category = if (event.startsWith("MEMORY_RETRIEVED")) "MEMORY / RECALL" else "VOICE / TTS"
+                entries.add("$category · $event")
                 lastThoughtEvent = event
             }
         }
