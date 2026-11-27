@@ -6,6 +6,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.sqrt
@@ -165,6 +167,7 @@ class LocalMemoryManager(
 ) {
     private val database = PhantomMemoryDatabase.get(context)
     private val dao = database.memoryDao()
+    private val embeddingMutex = Mutex()
     val profileId: String get() = profileManager.localProfileId
 
     suspend fun recordEligibleTurn(role: String, text: String) = withContext(Dispatchers.IO) {
@@ -182,7 +185,7 @@ class LocalMemoryManager(
     suspend fun pin(text: String): Long = withContext(Dispatchers.IO) {
         require(text.isNotBlank())
         require(!MemoryPrivacyFilter.isSensitive(text)) { "This message appears to contain sensitive information and was not pinned." }
-        val vector = embedder.embed(text)
+        val vector = embedText(text)
         require(vector.size == EmbeddingEngine.DIMENSIONS && vector.all { it.isFinite() })
         val magnitude = sqrt(vector.sumOf { it.toDouble() * it.toDouble() })
         require(magnitude in 0.999..1.001) { "Embedding must be L2-normalized." }
@@ -198,7 +201,7 @@ class LocalMemoryManager(
 
     suspend fun searchContext(query: String, limit: Int = 3): List<MemoryChunk> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
-        val queryVector = embedder.embed(query)
+        val queryVector = embedText(query)
         val queryMagnitude = sqrt(queryVector.sumOf { it.toDouble() * it.toDouble() })
         require(queryVector.size == EmbeddingEngine.DIMENSIONS && queryMagnitude in 0.999..1.001)
         val candidates = dao.candidateMemories(profileId)
@@ -231,6 +234,17 @@ class LocalMemoryManager(
 
     suspend fun clearPendingTurns() = withContext(Dispatchers.IO) {
         dao.clearEligibleTurns(profileId)
+    }
+
+    private suspend fun embedText(text: String): FloatArray = embeddingMutex.withLock {
+        if (embedder is EmbeddingEngine) embedder.initialize()
+        try {
+            embedder.embed(text)
+        } finally {
+            // Do not keep an ONNX session resident while Llama is generating or a Worker
+            // is loading its native model. The pinned assets remain cached on disk.
+            if (embedder is EmbeddingEngine) embedder.close()
+        }
     }
 
     private fun FloatArray.toBytes() = ByteBuffer.allocate(size * 4).order(ByteOrder.LITTLE_ENDIAN)

@@ -29,6 +29,7 @@ class EmbeddingEngine(context: Context) : LocalEmbedder, AutoCloseable {
     private val env = OrtEnvironment.getEnvironment()
 
     suspend fun initialize() = withContext(Dispatchers.IO) {
+        if (session != null) return@withContext
         ensureFile(modelFile, MODEL_URL, MODEL_SHA256)
         ensureFile(vocabFile, VOCAB_URL, VOCAB_SHA256)
         tokenizer = WordPieceTokenizer(vocabFile)

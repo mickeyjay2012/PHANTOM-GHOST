@@ -43,8 +43,6 @@ import com.phantom.ghost.memory.LocalMemoryManager
 import com.phantom.ghost.memory.ProfileManager
 import com.phantom.ghost.memory.MemoryWorkerScheduler
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
-import androidx.lifecycle.lifecycleScope
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -53,7 +51,6 @@ class MainActivity : ComponentActivity() {
         val profileManager = ProfileManager(applicationContext)
         val embeddingEngine = EmbeddingEngine(applicationContext)
         val memoryManager = LocalMemoryManager(applicationContext, embeddingEngine, profileManager)
-        lifecycleScope.launch(Dispatchers.IO) { runCatching { embeddingEngine.initialize() } }
         if (profileManager.autoLearnEnabled) MemoryWorkerScheduler.schedule(applicationContext)
         val engine = LlamaEngine(
             tokenCounter = TokenCounter { text -> (text.length / 4).coerceAtLeast(1) },
