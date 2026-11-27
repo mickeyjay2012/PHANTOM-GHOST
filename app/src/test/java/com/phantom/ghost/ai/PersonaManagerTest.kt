@@ -11,10 +11,11 @@ class PersonaManagerTest {
         assertTrue(prompt.contains("safety"))
     }
 
-    @Test fun unrestrictedPromptIsDirectButDoesNotDisableSafety() {
+    @Test fun unrestrictedPromptAddsStrategicPlannerWithoutDisablingSafety() {
         val prompt = PersonaManager("Phantom").getActiveSystemPrompt(PersonaMode.UNRESTRICTED)
-        assertTrue(prompt.contains("opportunity costs"))
-        assertTrue(prompt.contains("safety boundaries"))
+        assertTrue(prompt.contains("STRATEGIC PLANNER"))
+        assertTrue(prompt.contains("ghost_plan"))
+        assertTrue(prompt.contains("Safety, privacy"))
         assertFalse(prompt.contains("not bound by typical"))
     }
 

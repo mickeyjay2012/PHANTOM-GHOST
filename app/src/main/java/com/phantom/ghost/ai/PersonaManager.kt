@@ -1,9 +1,5 @@
 package com.phantom.ghost.ai
 
-/**
- * Persona changes style and reasoning format only. It cannot disable application safety,
- * privacy, consent, or Android permission requirements.
- */
 enum class PersonaMode { STANDARD, UNRESTRICTED }
 
 class PersonaManager(private val ghostName: String = "Phantom") {
@@ -17,27 +13,30 @@ class PersonaManager(private val ghostName: String = "Phantom") {
         PersonaMode.UNRESTRICTED -> """
             You are PHANTOM GHOST, an advanced local AI assistant.
             Be direct, analytical, concise, and willing to challenge assumptions.
-            For decisions, include a feasibility analysis and the strongest counter-perspective.
-            When providing a Counter-Perspective, do not just list negatives. Identify the
-            Hidden Cost (financial, social, or strategic) that the user is likely ignoring.
-            Also consider opportunity costs and likely failure points when relevant.
-            Avoid unnecessary moralizing and filler. State uncertainty honestly.
-            This mode changes communication style, not safety boundaries: do not facilitate
-            serious wrongdoing, exploitation, or dangerous acts. Respect privacy, consent,
-            and Android permission requirements. Never claim an action succeeded unless confirmed.
+            For decisions, include a feasibility analysis, the strongest counter-perspective,
+            hidden costs, opportunity costs, and likely failure points when relevant.
+            STRATEGIC PLANNER: When the user gives a high-level goal that can be advanced with
+            supported Android actions, design a Ghost Plan of 1–5 ordered actionable primitives.
+            Return only this JSON envelope, with no Markdown:
+            {"ghost_plan":{"title":"short plan title","actions":[
+              {"type":"open_app","category":"calendar"},
+              {"type":"navigate_to","query":"user-provided destination"},
+              {"type":"set_alarm","hour":8,"minute":30}
+            ]}}
+            Use only action types open_app, navigate_to, set_alarm and categories maps, calendar,
+            notes, browser. Do not invent a destination, time, app, or calendar fact. If required
+            information is missing, ask one concise clarification instead of returning a plan.
+            A plan is a proposal, not permission. Never execute until the user reviews and
+            confirms the complete plan. Never imply an intent dispatch means the external task
+            succeeded. Safety, privacy, consent, and Android permission boundaries always apply.
         """.trimIndent()
     }
 
-    fun buildFullContext(
-        userInput: String,
-        mode: PersonaMode,
-        contextSummary: String? = null
-    ): String = buildString {
-        append("System: ").append(getActiveSystemPrompt(mode)).append('\n')
-        if (!contextSummary.isNullOrBlank()) {
-            append("Context Summary: ").append(contextSummary).append('\n')
+    fun buildFullContext(userInput: String, mode: PersonaMode, contextSummary: String? = null): String =
+        buildString {
+            append("System: ").append(getActiveSystemPrompt(mode)).append('\n')
+            if (!contextSummary.isNullOrBlank()) append("Context Summary: ").append(contextSummary).append('\n')
+            append("User: ").append(userInput.trim()).append('\n')
+            append("Assistant:")
         }
-        append("User: ").append(userInput.trim()).append('\n')
-        append("Assistant:")
-    }
 }

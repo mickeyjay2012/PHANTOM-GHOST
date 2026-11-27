@@ -185,7 +185,8 @@ fun MainAssistantScreen(
     voiceState: com.phantom.ghost.voice.VoiceUiState = com.phantom.ghost.voice.VoiceUiState(),
     onStartListening: (PersonaMode) -> Unit = {},
     onStopListening: () -> Unit = {},
-    onSend: (String, PersonaMode) -> Flow<String>
+    onSend: (String, PersonaMode) -> Flow<String>,
+    onPlanCandidate: (String) -> Unit = {}
 ) {
     var message by remember { mutableStateOf("") }
     var activePersonaMode by remember { mutableStateOf(PersonaMode.STANDARD) }
@@ -282,6 +283,7 @@ fun MainAssistantScreen(
                                             entries[entries.lastIndex] = "PHANTOM: " + response.toString()
                                         }
                                         if (response.isEmpty()) entries[entries.lastIndex] = "No response was returned."
+                                        else onPlanCandidate(response.toString())
                                     } catch (error: Throwable) {
                                         entries[entries.lastIndex] = "CORE STATUS: " + (error.message ?: error.javaClass.simpleName)
                                     } finally {

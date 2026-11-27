@@ -22,6 +22,8 @@ import androidx.lifecycle.ViewModelProvider
 import com.phantom.ghost.ui.*
 import com.phantom.ghost.actions.ActionConfirmationOverlay
 import com.phantom.ghost.actions.ActionExecutor
+import com.phantom.ghost.actions.GhostPlan
+import com.phantom.ghost.actions.GhostPlanParser
 import com.phantom.ghost.monitor.ProactiveMonitor
 import com.phantom.ghost.ai.LlamaEngine
 import com.phantom.ghost.ai.TokenCounter
@@ -81,6 +83,7 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
     LaunchedEffect(modelManager) { modelManager.checkModelPresence() }
     var screen by remember { mutableStateOf(PhantomScreen.ASSISTANT) }
     var showAction by remember { mutableStateOf(false) }
+    var pendingPlan by remember { mutableStateOf<GhostPlan?>(null) }
     var showBanner by remember { mutableStateOf(true) }
     PhantomDesignSystem {
         Surface(Modifier.fillMaxSize(), color=PhantomColors.PhantomBlack) {
@@ -110,7 +113,10 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                                 else micPermission.launch(Manifest.permission.RECORD_AUDIO)
                             },
                             onStopListening={voiceVm.stopListening()},
-                            onSend={input, mode -> engine.generateResponse(input, mode)}
+                            onSend={input, mode -> engine.generateResponse(input, mode)},
+                            onPlanCandidate={ raw ->
+                                GhostPlanParser.parse(raw)?.let { plan -> pendingPlan = plan; showAction = true }
+                            }
                         )
                         PhantomScreen.MEMORY -> MemoryProfileScreen()
                         PhantomScreen.MODELS -> ModelManagerScreen(
@@ -153,6 +159,7 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
             }
             if (showAction) ActionConfirmationOverlay(
                 executor = actionExecutor,
+                plan = pendingPlan,
                 onEnableProactiveMonitor = {
                     val permissions = buildList {
                         add(Manifest.permission.READ_CALENDAR)
@@ -161,7 +168,7 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                     proactivePermission.launch(permissions)
                 },
                 onDisableProactiveMonitor = { proactiveMonitor.cancel() },
-                onDismiss = { showAction = false }
+                onDismiss = { showAction = false; pendingPlan = null }
             )
         }
     }

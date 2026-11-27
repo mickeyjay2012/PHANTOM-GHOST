@@ -7,9 +7,10 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <queries>
-        <package android:name="com.google.android.apps.maps" />
-        <package android:name="com.android.chrome" />
-        <package android:name="com.google.android.googlequicksearchbox" />
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.APP_MAPS" /></intent>
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.APP_CALENDAR" /></intent>
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.APP_BROWSER" /></intent>
+        <intent><action android:name="android.intent.action.CREATE_NOTE" /></intent>
     </queries>
     <application android:allowBackup="false" android:icon="@drawable/phantom_emblem" android:roundIcon="@drawable/phantom_emblem" android:label="PHANTOM GHOST" android:supportsRtl="true" android:usesCleartextTraffic="false" android:theme="@android:style/Theme.Material.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true">

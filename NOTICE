@@ -35,6 +35,8 @@ The following files are designated proprietary:
 - `app/src/main/java/com/phantom/ghost/voice/MainAssistantViewModel.kt`
 - `app/src/main/java/com/phantom/ghost/MainActivity.kt`
 - `app/src/main/java/com/phantom/ghost/actions/ActionExecutor.kt`
+- `app/src/main/java/com/phantom/ghost/actions/DynamicAllowList.kt`
+- `app/src/main/java/com/phantom/ghost/actions/GhostPlan.kt`
 - `app/src/main/java/com/phantom/ghost/actions/ActionConfirmationOverlay.kt`
 - `app/src/main/java/com/phantom/ghost/actions/PhantomAccessibilityService.kt`
 - `app/src/main/java/com/phantom/ghost/monitor/ProactiveMonitor.kt`

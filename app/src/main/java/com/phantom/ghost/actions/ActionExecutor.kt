@@ -5,27 +5,23 @@ import android.content.Intent
 import android.net.Uri
 import android.os.BatteryManager
 import android.provider.AlarmClock
-import org.json.JSONObject
-
-sealed interface ApprovedAction {
-    data class OpenApp(val packageName: String) : ApprovedAction
-    data class NavigateTo(val query: String, val targetPackage: String = MAPS_PACKAGE) : ApprovedAction
-    data class SetAlarm(val hour: Int, val minute: Int) : ApprovedAction
-
-    companion object {
-        const val MAPS_PACKAGE = "com.google.android.apps.maps"
-        const val CHROME_PACKAGE = "com.android.chrome"
-        const val GOOGLE_PACKAGE = "com.google.android.googlequicksearchbox"
-        val OPENABLE_PACKAGES = setOf(MAPS_PACKAGE, CHROME_PACKAGE, GOOGLE_PACKAGE)
-        val SEARCH_PACKAGES = setOf(MAPS_PACKAGE, CHROME_PACKAGE, GOOGLE_PACKAGE)
-    }
-}
 
 data class ActionResult(val ok: Boolean, val message: String)
+data class ActionObservation(val step: Int, val action: String, val ok: Boolean, val observation: String)
+data class ActionExecutionReport(val observations: List<ActionObservation>) {
+    val completed: Boolean get() = observations.isNotEmpty() && observations.all { it.ok }
+}
+
 enum class AssistantMode { ACTIVE, PASSIVE_LOW_BATTERY }
 
-/** Only launches a small, explicit set of user-visible Android intents. */
+/**
+ * Executes only typed, allow-listed Android intents. A plan requires one explicit
+ * confirmation, is bounded to five steps, and stops on the first synchronous failure.
+ * Observations describe intent dispatch, never claim the user completed the external task.
+ */
 class ActionExecutor(private val context: Context) {
+    private val allowList = DynamicAllowList(context)
+
     fun currentMode(): AssistantMode {
         val battery = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         val percent = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -34,75 +30,64 @@ class ActionExecutor(private val context: Context) {
 
     fun automationAllowed(): Boolean = currentMode() == AssistantMode.ACTIVE
 
-    /** Backward-compatible JSON envelope for the assistant action router. */
-    fun execute(json: String, userConfirmed: Boolean = false): ActionResult = runCatching {
-        val root = JSONObject(json)
-        require(root.keys().asSequence().toSet() == setOf("action", "params")) {
-            "Unexpected action fields."
-        }
-        require(root.getString("action") == "system_command") { "Action type is not allow-listed." }
-        val params = root.getJSONObject("params")
-        val action = when (params.getString("command")) {
-            "open_app" -> ApprovedAction.OpenApp(params.getString("app_name"))
-            "navigate_to" -> ApprovedAction.NavigateTo(
-                params.getString("query"),
-                params.optString("package_name", ApprovedAction.MAPS_PACKAGE)
-            )
-            "set_alarm" -> ApprovedAction.SetAlarm(
-                params.getInt("hour"), params.getInt("minute")
-            )
-            else -> error("Command is not allow-listed.")
-        }
-        execute(action, userConfirmed)
-    }.getOrElse { ActionResult(false, it.message ?: "Action was rejected.") }
+    fun executePlan(plan: GhostPlan, userConfirmed: Boolean): ActionExecutionReport {
+        if (!userConfirmed) return ActionExecutionReport(
+            listOf(ActionObservation(0, "Ghost Plan", false, "Confirmation is required."))
+        )
+        if (!automationAllowed()) return ActionExecutionReport(
+            listOf(ActionObservation(0, "Ghost Plan", false, "Actions are paused below 20% battery."))
+        )
+        if (plan.actions.isEmpty() || plan.actions.size > 5) return ActionExecutionReport(
+            listOf(ActionObservation(0, "Ghost Plan", false, "Plan must contain 1–5 actions."))
+        )
 
-    fun execute(action: ApprovedAction, userConfirmed: Boolean): ActionResult = runCatching {
-        require(userConfirmed) { "This action needs your confirmation." }
-        require(automationAllowed()) { "Low Power Mode: actions are paused below 20% battery." }
+        val observations = mutableListOf<ActionObservation>()
+        plan.actions.forEachIndexed { index, action ->
+            val label = when (action) {
+                is AgentAction.OpenApp -> "Open ${action.category.label}"
+                is AgentAction.NavigateTo -> "Search Maps: ${action.query}"
+                is AgentAction.SetAlarm -> "Set alarm: %02d:%02d".format(action.hour, action.minute)
+            }
+            val result = executeOne(action)
+            observations += ActionObservation(index + 1, label, result.ok, result.message)
+            if (!result.ok) return ActionExecutionReport(observations)
+        }
+        return ActionExecutionReport(observations)
+    }
+
+    private fun executeOne(action: AgentAction): ActionResult = runCatching {
         when (action) {
-            is ApprovedAction.OpenApp -> {
-                require(action.packageName in ApprovedAction.OPENABLE_PACKAGES) { "App is not on the allow-list." }
-                val intent = context.packageManager.getLaunchIntentForPackage(action.packageName)
-                    ?: error("Approved app is not installed or has no launch activity.")
+            is AgentAction.OpenApp -> {
+                val app = allowList.resolve(action.category)
+                    ?: error("No compatible ${action.category.label} app was discovered.")
+                launch(context.packageManager.getLaunchIntentForPackage(app.packageName)
+                    ?: error("The selected app is no longer launchable."))
+                ActionResult(true, "Launch intent dispatched to ${app.label}; completion is not verified.")
+            }
+            is AgentAction.NavigateTo -> {
+                val maps = allowList.resolve(AppCategory.MAPS)
+                    ?: error("No Maps app was discovered.")
+                val intent = Intent(Intent.ACTION_VIEW,
+                    Uri.parse("geo:0,0?q=" + Uri.encode(action.query)))
+                    .setPackage(maps.packageName)
                 launch(intent)
-                ActionResult(true, "Opened the approved app.")
+                ActionResult(true, "Search intent dispatched to ${maps.label}; review the destination before starting navigation.")
             }
-            is ApprovedAction.NavigateTo -> {
-                val query = action.query.trim()
-                require(query.isNotEmpty() && query.length <= 200) { "Enter a destination or search phrase (maximum 200 characters)." }
-                require(action.targetPackage in ApprovedAction.SEARCH_PACKAGES) { "Search target is not on the allow-list." }
-                val injected = PhantomAccessibilityService.requestSearchAfterUserConfirmation(
-                    action.targetPackage, query
-                )
-                if (injected) {
-                    val intent = context.packageManager.getLaunchIntentForPackage(action.targetPackage)
-                        ?: error("Search app is not installed.")
-                    launch(intent)
-                    ActionResult(true, "Opened the approved app and queued a one-time search-field entry.")
-                } else {
-                    val fallback = Intent(
-                        Intent.ACTION_VIEW,
-                        Uri.parse("geo:0,0?q=" + Uri.encode(query))
-                    )
-                    launch(fallback)
-                    ActionResult(true, "Opened the Android maps search. Review the result in Maps.")
-                }
-            }
-            is ApprovedAction.SetAlarm -> {
+            is AgentAction.SetAlarm -> {
                 require(action.hour in 0..23 && action.minute in 0..59) { "Alarm time is invalid." }
                 val intent = Intent(AlarmClock.ACTION_SET_ALARM)
                     .putExtra(AlarmClock.EXTRA_HOUR, action.hour)
                     .putExtra(AlarmClock.EXTRA_MINUTES, action.minute)
                     .putExtra(AlarmClock.EXTRA_SKIP_UI, false)
                 launch(intent)
-                ActionResult(true, "Opened Android's alarm confirmation screen.")
+                ActionResult(true, "Android alarm review screen opened; the alarm is not saved until the user confirms there.")
             }
         }
     }.getOrElse { ActionResult(false, it.message ?: "Action was rejected.") }
 
     private fun launch(intent: Intent) {
         require(intent.resolveActivity(context.packageManager) != null) {
-            "No compatible Android app is available."
+            "No compatible Android activity is available."
         }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)

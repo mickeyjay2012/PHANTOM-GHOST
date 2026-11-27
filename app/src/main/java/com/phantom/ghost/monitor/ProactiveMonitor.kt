@@ -82,7 +82,7 @@ class ProactiveWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Upcoming calendar event")
-            .setContentText("You have an upcoming event within the next 24 hours.")
+            .setContentText(if (event.second - now <= TimeUnit.MINUTES.toMillis(30)) "An event is approaching. Open PHANTOM to review a preparation plan." else "You have an upcoming event within the next 24 hours.")
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setAutoCancel(true)
             .build()
