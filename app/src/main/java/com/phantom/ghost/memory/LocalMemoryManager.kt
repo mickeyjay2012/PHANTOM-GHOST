@@ -238,9 +238,16 @@ class LocalMemoryManager(
 
 /** Conservative local filter: do not turn obvious secrets or sensitive personal disclosures into memory. */
 internal object MemoryPrivacyFilter {
+    // Conservative deny-list for automatic capture and manual pinning. The extractor prompt
+    // also excludes these categories; this local check is a second, deterministic boundary.
     private val patterns = listOf(
-        Regex("(?i)\\b(password|passcode|api[_ -]?key|secret key|access token|private key)\\b"),
-        Regex("(?i)\\b(diagnosed with|my medication|my medical record|my religion|i am (gay|lesbian|bisexual)|my sexual orientation)\\b")
+        Regex("(?i)\\b(password|passcode|api[_ -]?key|secret|access token|private key|recovery phrase)\\b"),
+        Regex("(?i)\\b(health|medical|diagnos(ed|is)|medication|prescription|therapy|symptom|hospital|patient)\\b"),
+        Regex("(?i)\\b(religion|religious|church|mosque|temple|christian|muslim|hindu|jewish|atheist)\\b"),
+        Regex("(?i)\\b(politic(s|al)|political party|vote for|election preference)\\b"),
+        Regex("(?i)\\b(sexual orientation|sex life|intimate relationship|gay|lesbian|bisexual|transgender)\\b"),
+        Regex("(?i)\\b(criminal record|criminal history|arrested|convicted|court case)\\b"),
+        Regex("(?i)\\b(bank account|account number|card number|passport|national id|home address|phone number|email address)\\b")
     )
     fun isSensitive(text: String): Boolean = patterns.any { it.containsMatchIn(text) }
 }

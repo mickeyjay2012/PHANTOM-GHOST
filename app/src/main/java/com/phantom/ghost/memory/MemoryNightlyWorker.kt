@@ -94,6 +94,9 @@ class MemoryNightlyWorker(
                 }
             }
 
+            // If the user disables Auto-Learn while inference is running, do not commit.
+            if (!profile.autoLearnEnabled) return@withContext Result.success()
+
             // Phase 3: one short atomic commit. Failed inference above leaves all source rows eligible.
             database.withTransaction {
                 embeddings.forEach { (fact, vector) ->
