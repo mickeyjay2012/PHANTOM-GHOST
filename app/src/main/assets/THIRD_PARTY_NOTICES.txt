@@ -1,0 +1,22 @@
+PHANTOM GHOST TTS asset attributions
+
+CMU Pronouncing Dictionary (CMUdict)
+Copyright (C) 1993-2014 Carnegie Mellon University.
+CMUdict is made available for unrestricted research and commercial use. Carnegie Mellon
+requests acknowledgement of its origin when the material is used or redistributed.
+Source: https://github.com/cmusphinx/cmudict
+Pinned revision: 0f8072f814306c5ee4fbf992ed853601b12c01f9
+
+FrequencyWords
+Copyright (c) 2016 Hermit Dave.
+MIT License; retain the copyright and permission notice.
+Source: https://github.com/hermitdave/FrequencyWords
+Pinned revision: 072bbed282316a23651aa7068c7173aa7898cf80
+
+LJSpeech voice metadata and phoneme ID map
+Source: rhasspy/piper-voices
+Pinned revision: bae641dcb5a608cff81ccaf7ff018baaca1a33e1
+Voice: en_US-ljspeech-medium
+The training recordings are identified as public domain in the upstream voice model card.
+This statement concerns the source recordings/dataset and is not a blanket public-domain
+claim for all model artifacts or software. Preserve upstream metadata and notices.

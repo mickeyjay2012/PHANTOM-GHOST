@@ -54,6 +54,9 @@ jobs:
       - name: Set up Gradle and restore Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Generate pinned offline TTS assets
+        run: python3 scripts/generate_tts_assets.py
+
       - name: Run debug unit tests
         run: gradle :app:testDebugUnitTest --stacktrace
 

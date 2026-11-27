@@ -202,6 +202,15 @@ fun MainAssistantScreen(
             if (entries.lastOrNull()?.startsWith("PHANTOM (VOICE): ") == true) entries[entries.lastIndex] = line else entries.add(line)
         }
     }
+    var lastThoughtEvent by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(voiceState.thoughtEvents) {
+        voiceState.thoughtEvents.lastOrNull()?.let { event ->
+            if (event != lastThoughtEvent) {
+                entries.add("VOICE / TTS · $event")
+                lastThoughtEvent = event
+            }
+        }
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxHeight < 700.dp || maxWidth < 360.dp
         Scaffold(containerColor=PhantomColors.PhantomBlack, bottomBar={}) { padding ->
@@ -411,6 +420,7 @@ fun ModelManagerScreen(
     status: com.phantom.ghost.model.ModelStatus,
     progress: Float,
     whisperModelLabel: String = "Not loaded",
+    voiceProvenance: String = "LJSpeech voice not loaded",
     error: String?,
     onDownloadOrLoad: () -> Unit,
     onForceRedownload: () -> Unit
@@ -464,6 +474,11 @@ fun ModelManagerScreen(
             Text("WHISPER / EARS",style=PhantomType.label,color=PhantomColors.GhostCyan)
             Text(whisperModelLabel,color=PhantomColors.GhostWhite,fontSize=13.sp)
             Text("English base is preferred; multilingual base is selected automatically if needed.",fontSize=11.sp,color=PhantomColors.Muted)
+        }
+        GlassCard(Modifier.fillMaxWidth()) {
+            Text("PIPER / VOICE OUTPUT",style=PhantomType.label,color=PhantomColors.GhostCyan)
+            Text(voiceProvenance,color=PhantomColors.GhostWhite,fontSize=12.sp)
+            Text("LJSpeech medium is primary; high is the fallback. The model revision and dataset provenance are recorded when a voice loads.",fontSize=11.sp,color=PhantomColors.Muted)
         }
         GlassCard(Modifier.fillMaxWidth()) {
             Text("CONTEXT WINDOW  ${context.toInt()} TOKENS",style=PhantomType.label,color=PhantomColors.GhostCyan)

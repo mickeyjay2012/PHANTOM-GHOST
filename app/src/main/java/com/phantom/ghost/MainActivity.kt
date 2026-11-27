@@ -24,12 +24,16 @@ import com.phantom.ghost.ai.TokenCounter
 import com.phantom.ghost.ai.ConversationSummarizer
 import com.phantom.ghost.ai.PersonaMode
 import com.phantom.ghost.audio.AudioRecorder
+import com.phantom.ghost.audio.KotlinPhonemizer
+import com.phantom.ghost.audio.PiperEngine
+import com.phantom.ghost.audio.PiperOnnxBackend
 import com.phantom.ghost.audio.WhisperEngine
 import com.phantom.ghost.audio.WhisperModelManager
 import com.phantom.ghost.model.ModelManager
 import com.phantom.ghost.model.ModelStatus
 import com.phantom.ghost.voice.MainAssistantViewModel
 import kotlinx.coroutines.launch
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,10 +45,12 @@ class MainActivity : ComponentActivity() {
             }
         )
         val models = ModelManager(applicationContext)
+        val voiceDirectory = File(getExternalFilesDir(null) ?: filesDir, "voices").apply { mkdirs() }
+        val piper = PiperEngine(PiperOnnxBackend(phonemizer = KotlinPhonemizer(applicationContext)))
         val voiceVm = ViewModelProvider(this, object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                MainAssistantViewModel(engine, WhisperEngine(), WhisperModelManager(applicationContext), AudioRecorder()) as T
+                MainAssistantViewModel(engine, WhisperEngine(), WhisperModelManager(applicationContext), AudioRecorder(), piper, voiceDirectory) as T
         })[MainAssistantViewModel::class.java]
         setContent { PhantomGhostApp(engine, models, voiceVm) }
     }
@@ -100,6 +106,7 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                         PhantomScreen.MODELS -> ModelManagerScreen(
                             status=modelStatus, progress=downloadProgress, error=modelError,
                             whisperModelLabel=voiceState.activeWhisperModel,
+                            voiceProvenance=voiceState.ttsProvenance,
                             onDownloadOrLoad={
                                 scope.launch {
                                     runCatching {

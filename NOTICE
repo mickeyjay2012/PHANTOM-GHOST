@@ -29,12 +29,12 @@ The following files are designated proprietary:
 
 - `app/src/main/java/com/phantom/ghost/ai/PersonaManager.kt`
 - `app/src/main/java/com/phantom/ghost/audio/PiperEngine.kt`
-- `app/src/main/java/com/phantom/ghost/audio/KotlinPhonemizer.kt` (when added)
-- `app/src/main/java/com/phantom/ghost/audio/VoiceIsolator.kt` (when added)
+- `app/src/main/java/com/phantom/ghost/audio/KotlinPhonemizer.kt`
+- `app/src/main/java/com/phantom/ghost/audio/PhonemeMapper.kt`
+- `app/src/main/java/com/phantom/ghost/audio/VoiceIsolator.kt`
+- `app/src/main/java/com/phantom/ghost/voice/MainAssistantViewModel.kt`
+- `scripts/generate_tts_assets.py`
 
-The VoiceIsolator and KotlinPhonemizer entries are reserved future paths; those
-implementations were not present in the repository at the time this notice was
-written. No implementation or functionality is implied by listing them.
 
 ## Third-party components and model provenance
 
@@ -57,3 +57,17 @@ granted to recipients under earlier commits/releases are not retroactively
 withdrawn by this file. Before treating any file as proprietary in a release,
 verify copyright ownership and contributor permissions, add file-level license
 headers, and have the dual-license boundary reviewed by counsel.
+
+
+TTS data and model metadata
+---------------------------
+The CI build generates app/src/main/assets/cmu_lexicon.json from pinned CMUdict and
+FrequencyWords revisions. Their source and attribution terms are recorded in
+app/src/main/assets/THIRD_PARTY_NOTICES.txt. CMUdict is copyrighted by Carnegie Mellon
+University; it is not described here as public domain. Its upstream README permits
+research and commercial use and requests acknowledgement.
+
+The build also generates ljspeech_id_map.json from the pinned rhasspy/piper-voices
+revision. The LJSpeech medium and high voice cards identify the LJ Speech dataset as
+public domain. This dataset statement does not assert that the Piper engine or every
+other component is public domain.

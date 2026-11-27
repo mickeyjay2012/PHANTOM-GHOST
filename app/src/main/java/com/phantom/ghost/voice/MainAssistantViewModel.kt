@@ -5,17 +5,24 @@ import androidx.lifecycle.viewModelScope
 import com.phantom.ghost.ai.LlamaEngine
 import com.phantom.ghost.ai.PersonaMode
 import com.phantom.ghost.audio.AudioRecorder
+import com.phantom.ghost.audio.PiperEngine
+import com.phantom.ghost.audio.PiperVoiceProvenance
 import com.phantom.ghost.audio.VadEvent
 import com.phantom.ghost.audio.VoiceActivityDetector
 import com.phantom.ghost.audio.WhisperEngine
 import com.phantom.ghost.audio.WhisperModelManager
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
 data class VoiceUiState(
@@ -25,14 +32,18 @@ data class VoiceUiState(
     val transcript: String = "",
     val response: String = "",
     val error: String? = null,
-    val activeWhisperModel: String = "Not loaded"
+    val activeWhisperModel: String = "Not loaded",
+    val thoughtEvents: List<String> = emptyList(),
+    val ttsProvenance: String = "LJSpeech voice not loaded"
 )
 
 class MainAssistantViewModel(
     private val llama: LlamaEngine,
     private val whisper: WhisperEngine,
     private val models: WhisperModelManager,
-    private val recorder: AudioRecorder
+    private val recorder: AudioRecorder,
+    private val piper: PiperEngine,
+    private val voiceModelDirectory: File
 ) : ViewModel() {
     private val vad = VoiceActivityDetector()
     private val finishing = AtomicBoolean(false)
@@ -40,13 +51,25 @@ class MainAssistantViewModel(
     private val mutableState = MutableStateFlow(VoiceUiState())
     val state: StateFlow<VoiceUiState> = mutableState.asStateFlow()
 
+    private fun addThoughtEvent(event: String) {
+        val events = (mutableState.value.thoughtEvents + event).takeLast(40)
+        mutableState.value = mutableState.value.copy(thoughtEvents = events)
+    }
+
+    private fun onVoiceLoaded(provenance: PiperVoiceProvenance) {
+        mutableState.value = mutableState.value.copy(
+            ttsProvenance = "${provenance.modelName} · revision ${provenance.revision} · ${provenance.datasetStatus}"
+        )
+        addThoughtEvent("TTS_MODEL_LOADED · ${provenance.modelName}")
+    }
+
     fun startListening(mode: PersonaMode) {
         if (mutableState.value.preparing || mutableState.value.listening || mutableState.value.transcribing) return
         persona = mode
         finishing.set(false)
         mutableState.value = mutableState.value.copy(
             preparing = true, transcript = "", response = "", error = null,
-            listening = false, transcribing = false
+            listening = false, transcribing = false, thoughtEvents = emptyList()
         )
         viewModelScope.launch {
             try {
@@ -84,11 +107,41 @@ class MainAssistantViewModel(
                 val text = withContext(Dispatchers.IO) { whisper.transcribeSamples(pcm) }.trim()
                 check(text.isNotBlank()) { "No speech was recognized. Try again closer to the microphone." }
                 mutableState.value = mutableState.value.copy(transcribing = false, transcript = text)
-                val response = StringBuilder()
-                llama.generateResponse(text, persona).collect { token ->
-                    response.append(token)
-                    mutableState.value = mutableState.value.copy(response = response.toString())
+
+                // One Llama collection feeds both the visible transcript and the TTS channel.
+                // Starting the TTS consumer first prevents the first token from being lost.
+                val speechChannel = Channel<String>(capacity = 64)
+                val speechFlow = speechChannel.receiveAsFlow()
+                val speechJob = launch(start = CoroutineStart.UNDISPATCHED) {
+                    try {
+                        piper.speakResponse(
+                            tokens = speechFlow,
+                            modelDirectory = voiceModelDirectory,
+                            onLowConfidence = { word ->
+                                addThoughtEvent("LOW_CONFIDENCE_PHONEME · $word")
+                            },
+                            onVoiceLoaded = ::onVoiceLoaded
+                        )
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (ttsError: Throwable) {
+                        addThoughtEvent("TTS_UNAVAILABLE · ${ttsError.message ?: "voice model error"}")
+                        // Drain tokens so a missing voice never stalls text generation.
+                        speechFlow.collect { }
+                    }
                 }
+
+                val response = StringBuilder()
+                try {
+                    llama.generateResponse(text, persona).collect { token ->
+                        speechChannel.send(token)
+                        response.append(token)
+                        mutableState.value = mutableState.value.copy(response = response.toString())
+                    }
+                } finally {
+                    speechChannel.close()
+                }
+                speechJob.join()
             } catch (error: Throwable) {
                 mutableState.value = mutableState.value.copy(
                     listening = false, transcribing = false,
@@ -116,6 +169,7 @@ class MainAssistantViewModel(
 
     override fun onCleared() {
         recorder.cancel()
+        piper.close()
         super.onCleared()
     }
 }
