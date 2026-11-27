@@ -61,6 +61,7 @@ fun MemoryVaultScreen(
                     Switch(checked = autoLearn, onCheckedChange = { enabled ->
                         autoLearn = enabled
                         profileManager.autoLearnEnabled = enabled
+                        if (!enabled) scope.launch { memoryManager.clearPendingTurns() }
                         onAutoLearnChanged(enabled)
                     })
                 }

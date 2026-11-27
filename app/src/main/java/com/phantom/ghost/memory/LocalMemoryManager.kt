@@ -109,6 +109,9 @@ interface MemoryDao {
 
     @Query("DELETE FROM conversation WHERE local_profile_id = :profileId AND createdAt < :cutoff")
     suspend fun deleteExpiredTurns(profileId: String, cutoff: Long)
+
+    @Query("DELETE FROM conversation WHERE local_profile_id = :profileId AND status = 'ELIGIBLE'")
+    suspend fun clearEligibleTurns(profileId: String)
 }
 
 @Database(entities = [ConversationEntity::class, MemoryEntity::class], version = 3, exportSchema = true)
@@ -224,6 +227,10 @@ class LocalMemoryManager(
 
     suspend fun clearVault() = withContext(Dispatchers.IO) {
         dao.clearVault(profileId)
+    }
+
+    suspend fun clearPendingTurns() = withContext(Dispatchers.IO) {
+        dao.clearEligibleTurns(profileId)
     }
 
     private fun FloatArray.toBytes() = ByteBuffer.allocate(size * 4).order(ByteOrder.LITTLE_ENDIAN)

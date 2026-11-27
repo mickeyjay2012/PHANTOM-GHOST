@@ -27,11 +27,13 @@ class MemoryNightlyWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val profile = ProfileManager(applicationContext)
-        if (!profile.autoLearnEnabled) return@withContext Result.success()
-
         val database = PhantomMemoryDatabase.get(applicationContext)
         val dao = database.memoryDao()
         val profileId = profile.localProfileId
+        if (!profile.autoLearnEnabled) {
+            dao.clearEligibleTurns(profileId)
+            return@withContext Result.success()
+        }
         dao.deleteExpiredTurns(profileId, System.currentTimeMillis() - RETENTION_MS)
         val turns = dao.eligibleTurns(profileId, 80)
             .filter { it.createdAt >= System.currentTimeMillis() - DAY_MS }
