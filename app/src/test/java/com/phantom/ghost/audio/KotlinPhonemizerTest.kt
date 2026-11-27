@@ -24,7 +24,7 @@ class KotlinPhonemizerTest {
         val result = ArpabetToEspeak.convert(
             listOf("D", "IY0", "S", "EH1", "N", "T", "R", "AH0", "L", "AY2", "Z", "D")
         )
-        assertEquals("diːsˈɛntrəlˌaɪzd", result)
+        assertEquals("diːsˈɛntɹəlˌaɪzd", result)
     }
 
     @Test

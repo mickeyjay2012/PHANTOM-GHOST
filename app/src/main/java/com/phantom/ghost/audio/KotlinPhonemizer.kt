@@ -52,7 +52,7 @@ class KotlinPhonemizer(context: Context) : PiperPhonemizer {
                 }
             }
         }
-        output += modelMapper.map("\\$").toList()
+        output += modelMapper.map("\$").toList()
         return output.toLongArray()
     }
 

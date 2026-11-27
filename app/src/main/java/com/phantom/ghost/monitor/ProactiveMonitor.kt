@@ -59,7 +59,6 @@ class ProactiveWorker(context: Context, params: WorkerParameters) : CoroutineWor
             .appendPath(now.toString()).appendPath(end.toString()).build()
         val projection = arrayOf(
             CalendarContract.Instances.EVENT_ID,
-            CalendarContract.Instances.TITLE,
             CalendarContract.Instances.BEGIN
         )
         val selection = CalendarContract.Instances.BEGIN + " >= ?"
@@ -67,10 +66,9 @@ class ProactiveWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val event = applicationContext.contentResolver.query(
             uri, projection, selection, arrayOf(now.toString()), order
         )?.use { cursor ->
-            if (cursor.moveToFirst()) Triple(cursor.getLong(0), cursor.getString(1).orEmpty(), cursor.getLong(2))
+            if (cursor.moveToFirst()) Pair(cursor.getLong(0), cursor.getLong(1))
             else null
         } ?: return
-        if (event.third - now > TimeUnit.HOURS.toMillis(1)) return
         val prefs = applicationContext.getSharedPreferences("phantom_calendar", Context.MODE_PRIVATE)
         if (prefs.getLong("last_event_notified", -1L) == event.first) return
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -84,7 +82,7 @@ class ProactiveWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Upcoming calendar event")
-            .setContentText("You have an event coming up within the next hour.")
+            .setContentText("You have an upcoming event within the next 24 hours.")
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setAutoCancel(true)
             .build()

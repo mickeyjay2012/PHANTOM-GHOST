@@ -52,6 +52,7 @@ class PhantomAccessibilityService : AccessibilityService() {
         val args = Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, request.query)
         }
+        if (!field.performAction(AccessibilityNodeInfo.ACTION_FOCUS)) return
         if (field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) pendingSearch = null
     }
 

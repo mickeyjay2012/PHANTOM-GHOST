@@ -3,6 +3,7 @@ package com.phantom.ghost
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -19,6 +20,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.phantom.ghost.ui.*
+import com.phantom.ghost.actions.ActionConfirmationOverlay
+import com.phantom.ghost.actions.ActionExecutor
+import com.phantom.ghost.monitor.ProactiveMonitor
 import com.phantom.ghost.ai.LlamaEngine
 import com.phantom.ghost.ai.TokenCounter
 import com.phantom.ghost.ai.ConversationSummarizer
@@ -45,6 +49,8 @@ class MainActivity : ComponentActivity() {
             }
         )
         val models = ModelManager(applicationContext)
+        val actionExecutor = ActionExecutor(applicationContext)
+        val proactiveMonitor = ProactiveMonitor(applicationContext)
         val voiceDirectory = File(getExternalFilesDir(null) ?: filesDir, "voices").apply { mkdirs() }
         val piper = PiperEngine(PiperOnnxBackend(phonemizer = KotlinPhonemizer(applicationContext)))
         val voiceVm = ViewModelProvider(this, object : ViewModelProvider.Factory {
@@ -52,12 +58,12 @@ class MainActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
                 MainAssistantViewModel(engine, WhisperEngine(), WhisperModelManager(applicationContext), AudioRecorder(), piper, voiceDirectory) as T
         })[MainAssistantViewModel::class.java]
-        setContent { PhantomGhostApp(engine, models, voiceVm) }
+        setContent { PhantomGhostApp(engine, models, voiceVm, actionExecutor, proactiveMonitor) }
     }
 }
 
 @Composable
-private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voiceVm: MainAssistantViewModel) {
+private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voiceVm: MainAssistantViewModel, actionExecutor: ActionExecutor, proactiveMonitor: ProactiveMonitor) {
     val context = LocalContext.current
     val modelStatus by modelManager.modelState.collectAsState()
     val downloadProgress by modelManager.downloadProgress.collectAsState()
@@ -67,6 +73,10 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
     var pendingPersona by remember { mutableStateOf(PersonaMode.STANDARD) }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) voiceVm.startListening(pendingPersona)
+    }
+    val proactivePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        val calendarGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
+        if (calendarGranted) proactiveMonitor.schedule()
     }
     LaunchedEffect(modelManager) { modelManager.checkModelPresence() }
     var screen by remember { mutableStateOf(PhantomScreen.ASSISTANT) }
@@ -141,9 +151,17 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                     }
                 }
             }
-            if(showAction) ActionConfirmationDialog(
-                "Open an app or navigate using an approved Android action.",
-                onConfirm={showAction=false},onAbort={showAction=false}
+            if (showAction) ActionConfirmationOverlay(
+                executor = actionExecutor,
+                onEnableProactiveMonitor = {
+                    val permissions = buildList {
+                        add(Manifest.permission.READ_CALENDAR)
+                        if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+                    }.toTypedArray()
+                    proactivePermission.launch(permissions)
+                },
+                onDisableProactiveMonitor = { proactiveMonitor.cancel() },
+                onDismiss = { showAction = false }
             )
         }
     }
