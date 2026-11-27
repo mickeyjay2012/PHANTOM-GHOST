@@ -96,6 +96,13 @@ class LlamaEngine(
         userTurnsSinceSummary = 0
     }
 
+    /** Adds verified tool-dispatch observations to the next model context. */
+    suspend fun recordToolObservations(observations: List<String>) = mutex.withLock {
+        observations.take(5).forEach { observation ->
+            history += ChatTurn("tool", observation.take(500))
+        }
+    }
+
     suspend fun reset() = mutex.withLock {
         history.clear()
         contextSummary = null

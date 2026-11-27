@@ -18,6 +18,7 @@ fun ActionConfirmationOverlay(
     plan: GhostPlan?,
     onEnableProactiveMonitor: () -> Unit,
     onDisableProactiveMonitor: () -> Unit,
+    onObservations: (ActionExecutionReport) -> Unit,
     onDismiss: () -> Unit
 ) {
     var report by remember { mutableStateOf<ActionExecutionReport?>(null) }
@@ -44,7 +45,9 @@ fun ActionConfirmationOverlay(
                     Spacer(Modifier.height(14.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         PhantomButton("CONFIRM ALL", Modifier.weight(1f), onClick = {
-                            report = executor.executePlan(plan, userConfirmed = true)
+                            val execution = executor.executePlan(plan, userConfirmed = true)
+                            report = execution
+                            onObservations(execution)
                         })
                         OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
                             Text("ABORT", color = PhantomColors.Muted)

@@ -168,6 +168,13 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                     proactivePermission.launch(permissions)
                 },
                 onDisableProactiveMonitor = { proactiveMonitor.cancel() },
+                onObservations = { execution ->
+                    scope.launch {
+                        engine.recordToolObservations(execution.observations.map {
+                            "Step ${it.step}: ${it.action}. ${if (it.ok) "Dispatched" else "Failed"}. ${it.observation}"
+                        })
+                    }
+                },
                 onDismiss = { showAction = false; pendingPlan = null }
             )
         }
