@@ -1,12 +1,46 @@
-MIT License
+PHANTOM GHOST — DUAL-LICENSE NOTICE
 
-Copyright (c) 2026 OYEBIMPE MICHAEL oluwadarasimi 
+Copyright (c) 2026 PHANTOM GHOST contributors.
+
+This repository uses a file-scoped dual-license model beginning with the first
+release that includes this notice. The scope is defined by NOTICE. It does not
+retroactively revoke permissions granted under licenses accompanying earlier
+commits or releases.
+
+1. COMMUNITY CORE — MIT
+
+Files explicitly listed in the "MIT-licensed Community Core" section of NOTICE
+are licensed under the MIT License below.
+
+2. GHOST EXPERIENCE — PROPRIETARY
+
+Files explicitly listed in the "Proprietary Ghost Experience" section of NOTICE
+are proprietary and all rights are reserved, except where a separate written
+license from the relevant copyright holder says otherwise. No permission to
+copy, modify, distribute, sublicense, or create derivative works from those
+files is granted by this repository notice.
+
+3. THIRD-PARTY MATERIAL
+
+Third-party models, datasets, libraries, generated assets, and other materials
+retain their own licenses and terms. This file does not relicense them. Consult
+NOTICE and the relevant upstream license/model card before redistribution or
+commercial deployment.
+
+4. CONTRIBUTOR AND OWNERSHIP LIMITATION
+
+This notice can only license material for which the relevant copyright holder
+has authority to grant the stated license. Contributions from third parties
+remain subject to their applicable contributor terms and prior grants. This
+notice is not legal advice; obtain legal review before enterprise distribution.
+
+MIT LICENSE (Community Core files only)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
+of the software files designated MIT-licensed in NOTICE (the "Software"), to
+deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all

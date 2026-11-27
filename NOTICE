@@ -1,0 +1,59 @@
+# PHANTOM GHOST — NOTICE
+
+This file defines the intended file-scoped licensing boundaries for the
+repository. The project is not yet split into separate Gradle modules named
+core-ai, core-audio, and core-ui; the paths below refer to the current app
+source tree.
+
+## MIT-licensed Community Core
+
+The following source files are designated MIT-licensed:
+
+- `app/src/main/java/com/phantom/ghost/ai/LlamaEngine.kt`
+- `app/src/main/java/com/phantom/ghost/ai/NativeBridge.kt`
+- `app/src/main/java/com/phantom/ghost/audio/AudioRecorder.kt`
+- `app/src/main/java/com/phantom/ghost/audio/VoiceActivityDetector.kt`
+- `app/src/main/java/com/phantom/ghost/audio/WhisperEngine.kt`
+- `app/src/main/java/com/phantom/ghost/audio/WhisperModelManager.kt`
+- `app/src/main/cpp/phantom_native.cpp`
+- `app/src/main/cpp/CMakeLists.txt`
+- `app/src/main/java/com/phantom/ghost/ui/PhantomScreens.kt`
+- `app/src/main/java/com/phantom/ghost/ui/PhantomTheme.kt` (if present)
+
+These are the community-facing AI, audio-input, and UI infrastructure files.
+The list must be updated when files are moved, split, or added.
+
+## Proprietary Ghost Experience — all rights reserved
+
+The following files are designated proprietary:
+
+- `app/src/main/java/com/phantom/ghost/ai/PersonaManager.kt`
+- `app/src/main/java/com/phantom/ghost/audio/PiperEngine.kt`
+- `app/src/main/java/com/phantom/ghost/audio/KotlinPhonemizer.kt` (when added)
+- `app/src/main/java/com/phantom/ghost/audio/VoiceIsolator.kt` (when added)
+
+The VoiceIsolator and KotlinPhonemizer entries are reserved future paths; those
+implementations were not present in the repository at the time this notice was
+written. No implementation or functionality is implied by listing them.
+
+## Third-party components and model provenance
+
+- ONNX Runtime Android is a third-party dependency; its upstream license and
+  notices must be retained with distributed builds.
+- LJSpeech source recordings are identified by the upstream Piper voice card as
+  public-domain dataset material. That does not automatically establish the
+  license of every model artifact, config, conversion, or bundled asset.
+- The upstream `rhasspy/piper-voices` repository reports MIT repository
+  metadata. Preserve the exact upstream model card, config, repository commit,
+  artifact hashes, and license metadata for every downloaded voice file.
+- Do not bundle or redistribute a voice until its exact artifact provenance
+  and applicable terms have been reviewed.
+- No eSpeak NG library or Piper GPL runtime is authorized by this notice.
+
+## Important release-history qualification
+
+The repository previously carried a blanket MIT LICENSE. Permissions already
+granted to recipients under earlier commits/releases are not retroactively
+withdrawn by this file. Before treating any file as proprietary in a release,
+verify copyright ownership and contributor permissions, add file-level license
+headers, and have the dual-license boundary reviewed by counsel.
