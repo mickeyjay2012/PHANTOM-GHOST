@@ -46,7 +46,11 @@ fun MemoryVaultScreen(
         Column(
             Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp, vertical = 12.dp)
         ) {
-            ScreenTitle("LOCAL INTELLIGENCE", "Memory Vault", "Only this device-local profile can access these facts.")
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("LOCAL INTELLIGENCE", style = PhantomType.label, color = PhantomColors.GhostCyan)
+                Text("Memory Vault", color = PhantomColors.GhostWhite, fontSize = 24.sp)
+                Text("Only this device-local profile can access these facts.", color = PhantomColors.Muted, fontSize = 12.sp)
+            }
             Spacer(Modifier.height(12.dp))
             GlassCard(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
