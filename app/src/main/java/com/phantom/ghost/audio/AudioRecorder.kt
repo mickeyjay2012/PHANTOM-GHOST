@@ -28,7 +28,10 @@ class AudioRecorder(
             AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
             maxOf(minSize * 2, 32_000)
         )
-        check(input.state == AudioRecord.STATE_INITIALIZED) { input.release(); "Microphone initialization failed." }
+        check(input.state == AudioRecord.STATE_INITIALIZED) {
+            input.release()
+            "Microphone initialization failed."
+        }
         ring.clear()
         stopping.set(false)
         audio = input
@@ -38,7 +41,10 @@ class AudioRecorder(
             try {
                 while (isActive && !stopping.get()) {
                     val count = input.read(frame, 0, frame.size, AudioRecord.READ_BLOCKING)
-                    if (count < 0) {\n                        if (stopping.get() || !isActive) break\n                        error("AudioRecord read failed: $count")\n                    }
+                    if (count < 0) {
+                        if (stopping.get() || !isActive) break
+                        error("AudioRecord read failed: $count")
+                    }
                     if (count > 0) {
                         val samples = frame.copyOf(count)
                         ring.append(samples)
