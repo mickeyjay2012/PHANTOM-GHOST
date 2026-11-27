@@ -84,7 +84,7 @@ class LlamaEngine(
             }
 
             history += ChatTurn("user", userInput.trim())
-            memoryManager?.recordEligibleTurn("user", userInput.trim())
+            runCatching { memoryManager?.recordEligibleTurn("user", userInput.trim()) }
             userTurnsSinceSummary++
             compact(config.contextTokens, force = userTurnsSinceSummary >= 5)
 
@@ -102,7 +102,7 @@ class LlamaEngine(
             }
             if (response.isNotEmpty()) {
                 history += ChatTurn("assistant", response.toString())
-                memoryManager?.recordEligibleTurn("assistant", response.toString())
+                runCatching { memoryManager?.recordEligibleTurn("assistant", response.toString()) }
             }
         } finally {
             mutex.unlock()

@@ -46,7 +46,7 @@ fun MemoryVaultScreen(
         Column(
             Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp, vertical = 12.dp)
         ) {
-            ScreenTitle("LOCAL INTELLIGENCE", "Memory Vault", "Only this encrypted local profile can access these facts.")
+            ScreenTitle("LOCAL INTELLIGENCE", "Memory Vault", "Only this device-local profile can access these facts.")
             Spacer(Modifier.height(12.dp))
             GlassCard(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {

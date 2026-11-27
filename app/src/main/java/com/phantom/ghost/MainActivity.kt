@@ -133,9 +133,14 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                             snackbarMessage=voiceState.snackbarMessage,
                             onSnackbarConsumed={ voiceVm.consumeSnackbar() }
                         )
-                        PhantomScreen.MEMORY -> MemoryVaultScreen(memoryManager, profileManager) { enabled ->
-                            if (enabled) MemoryWorkerScheduler.schedule(context) else MemoryWorkerScheduler.cancel(context)
-                        } onRunNow={ MemoryWorkerScheduler.runNow(context) }
+                        PhantomScreen.MEMORY -> MemoryVaultScreen(
+                            memoryManager = memoryManager,
+                            profileManager = profileManager,
+                            onAutoLearnChanged = { enabled ->
+                                if (enabled) MemoryWorkerScheduler.schedule(context) else MemoryWorkerScheduler.cancel(context)
+                            },
+                            onRunNow = { MemoryWorkerScheduler.runNow(context) }
+                        )
                         PhantomScreen.MODELS -> ModelManagerScreen(
                             status=modelStatus, progress=downloadProgress, error=modelError,
                             whisperModelLabel=voiceState.activeWhisperModel,
