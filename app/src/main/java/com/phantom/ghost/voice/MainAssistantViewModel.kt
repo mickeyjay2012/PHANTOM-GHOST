@@ -2,6 +2,7 @@ package com.phantom.ghost.voice
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.phantom.ghost.ai.ChatMessage
 import com.phantom.ghost.ai.LlamaEngine
 import com.phantom.ghost.ai.PersonaMode
 import com.phantom.ghost.audio.AudioRecorder
@@ -11,6 +12,7 @@ import com.phantom.ghost.audio.VadEvent
 import com.phantom.ghost.audio.VoiceActivityDetector
 import com.phantom.ghost.audio.WhisperEngine
 import com.phantom.ghost.audio.WhisperModelManager
+import com.phantom.ghost.memory.LocalMemoryManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +36,8 @@ data class VoiceUiState(
     val error: String? = null,
     val activeWhisperModel: String = "Not loaded",
     val thoughtEvents: List<String> = emptyList(),
-    val ttsProvenance: String = "LJSpeech voice not loaded"
+    val ttsProvenance: String = "LJSpeech voice not loaded",
+    val snackbarMessage: String? = null
 )
 
 class MainAssistantViewModel(
@@ -43,13 +46,41 @@ class MainAssistantViewModel(
     private val models: WhisperModelManager,
     private val recorder: AudioRecorder,
     private val piper: PiperEngine,
-    private val voiceModelDirectory: File
+    private val voiceModelDirectory: File,
+    private val memoryManager: LocalMemoryManager? = null
 ) : ViewModel() {
     private val vad = VoiceActivityDetector()
     private val finishing = AtomicBoolean(false)
     private var persona = PersonaMode.STANDARD
     private val mutableState = MutableStateFlow(VoiceUiState())
     val state: StateFlow<VoiceUiState> = mutableState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            llama.memoryEvents.collect { event ->
+                addThoughtEvent("${event.type} · ${event.facts.joinToString(" | ")}")
+            }
+        }
+    }
+
+    fun pinMessage(message: ChatMessage) {
+        viewModelScope.launch {
+            val manager = memoryManager
+            if (manager == null) {
+                mutableState.value = mutableState.value.copy(snackbarMessage = "Memory system is not ready.")
+                return@launch
+            }
+            runCatching { manager.pin(message.content) }
+                .onSuccess { mutableState.value = mutableState.value.copy(snackbarMessage = "Memory Pinned") }
+                .onFailure { error ->
+                    mutableState.value = mutableState.value.copy(
+                        snackbarMessage = error.message ?: "Could not pin this message."
+                    )
+                }
+        }
+    }
+
+    fun consumeSnackbar() { mutableState.value = mutableState.value.copy(snackbarMessage = null) }
 
     private fun addThoughtEvent(event: String) {
         val events = (mutableState.value.thoughtEvents + event).takeLast(40)
@@ -107,30 +138,22 @@ class MainAssistantViewModel(
                 val text = withContext(Dispatchers.IO) { whisper.transcribeSamples(pcm) }.trim()
                 check(text.isNotBlank()) { "No speech was recognized. Try again closer to the microphone." }
                 mutableState.value = mutableState.value.copy(transcribing = false, transcript = text)
-
-                // One Llama collection feeds both the visible transcript and the TTS channel.
-                // Starting the TTS consumer first prevents the first token from being lost.
                 val speechChannel = Channel<String>(capacity = 64)
                 val speechFlow = speechChannel.receiveAsFlow()
                 val speechJob = launch(start = CoroutineStart.UNDISPATCHED) {
                     try {
                         piper.speakResponse(
-                            tokens = speechFlow,
-                            modelDirectory = voiceModelDirectory,
-                            onLowConfidence = { word ->
-                                addThoughtEvent("LOW_CONFIDENCE_PHONEME · $word")
-                            },
+                            tokens = speechFlow, modelDirectory = voiceModelDirectory,
+                            onLowConfidence = { word -> addThoughtEvent("LOW_CONFIDENCE_PHONEME · $word") },
                             onVoiceLoaded = ::onVoiceLoaded
                         )
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (ttsError: Throwable) {
                         addThoughtEvent("TTS_UNAVAILABLE · ${ttsError.message ?: "voice model error"}")
-                        // Drain tokens so a missing voice never stalls text generation.
                         speechFlow.collect { }
                     }
                 }
-
                 val response = StringBuilder()
                 try {
                     llama.generateResponse(text, persona).collect { token ->
@@ -138,9 +161,7 @@ class MainAssistantViewModel(
                         response.append(token)
                         mutableState.value = mutableState.value.copy(response = response.toString())
                     }
-                } finally {
-                    speechChannel.close()
-                }
+                } finally { speechChannel.close() }
                 speechJob.join()
             } catch (error: Throwable) {
                 mutableState.value = mutableState.value.copy(

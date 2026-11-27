@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Dialog
 import com.phantom.ghost.ai.PersonaMode
+import com.phantom.ghost.ai.ChatMessage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -186,7 +187,10 @@ fun MainAssistantScreen(
     onStartListening: (PersonaMode) -> Unit = {},
     onStopListening: () -> Unit = {},
     onSend: (String, PersonaMode) -> Flow<String>,
-    onPlanCandidate: (String) -> Unit = {}
+    onPlanCandidate: (String) -> Unit = {},
+    onPinMessage: (ChatMessage) -> Unit = {},
+    snackbarMessage: String? = null,
+    onSnackbarConsumed: () -> Unit = {}
 ) {
     var message by remember { mutableStateOf("") }
     var activePersonaMode by remember { mutableStateOf(PersonaMode.STANDARD) }
@@ -196,6 +200,14 @@ fun MainAssistantScreen(
     ) }
     var state by remember { mutableStateOf(AgentState.IDLE) }
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var lastUserMessage by remember { mutableStateOf("") }
+    LaunchedEffect(snackbarMessage) {
+        if (!snackbarMessage.isNullOrBlank()) {
+            snackbarHostState.showSnackbar(snackbarMessage)
+            onSnackbarConsumed()
+        }
+    }
     var generating by remember { mutableStateOf(false) }
     LaunchedEffect(voiceState.response) {
         if (voiceState.response.isNotBlank()) {
@@ -214,7 +226,7 @@ fun MainAssistantScreen(
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxHeight < 700.dp || maxWidth < 360.dp
-        Scaffold(containerColor=PhantomColors.PhantomBlack, bottomBar={}) { padding ->
+        Scaffold(containerColor=PhantomColors.PhantomBlack, bottomBar={}, snackbarHost={ SnackbarHost(snackbarHostState) }) { padding ->
             Column(Modifier.fillMaxSize().padding(padding).padding(horizontal=if(compact) 14.dp else 20.dp)) {
                 Row(Modifier.fillMaxWidth().padding(top=8.dp,bottom=12.dp), verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.SpaceBetween) {
@@ -247,10 +259,11 @@ fun MainAssistantScreen(
                     verticalArrangement=Arrangement.spacedBy(10.dp)) {
                     items(entries) { item -> ThoughtStreamItem(ThoughtKind.OBSERVATION,item) }
                 }
-                Row(horizontalArrangement=Arrangement.spacedBy(8.dp), modifier=Modifier.fillMaxWidth().padding(bottom=10.dp)) {
-                    OutlinedButton(onClick=onOpenMemory,modifier=Modifier.weight(1f)) { Text("MEMORY",fontSize=10.sp) }
-                    OutlinedButton(onClick=onOpenModels,modifier=Modifier.weight(1f)) { Text("SYSTEM",fontSize=10.sp) }
-                    OutlinedButton(onClick=onConfirmAction,modifier=Modifier.weight(1f)) { Text("ACTIONS",fontSize=10.sp) }
+                Row(horizontalArrangement=Arrangement.spacedBy(5.dp), modifier=Modifier.fillMaxWidth().padding(bottom=10.dp)) {
+                    OutlinedButton(onClick=onOpenMemory,modifier=Modifier.weight(1f)) { Text("MEMORY",fontSize=9.sp) }
+                    OutlinedButton(onClick=onOpenModels,modifier=Modifier.weight(1f)) { Text("SYSTEM",fontSize=9.sp) }
+                    OutlinedButton(onClick=onConfirmAction,modifier=Modifier.weight(1f)) { Text("ACTIONS",fontSize=9.sp) }
+                    OutlinedButton(onClick={ if (lastUserMessage.isNotBlank()) onPinMessage(ChatMessage("user", lastUserMessage)) }, enabled=lastUserMessage.isNotBlank(), modifier=Modifier.weight(1f)) { Text("PIN",fontSize=9.sp) }
                 }
                 Surface(Modifier.fillMaxWidth().padding(bottom=12.dp),shape=RoundedCornerShape(28.dp),
                     color=PhantomColors.PhantomCharcoal,border=androidx.compose.foundation.BorderStroke(1.dp,PhantomColors.GhostCyan.copy(alpha=.3f))) {
@@ -270,6 +283,7 @@ fun MainAssistantScreen(
                             enabled = message.isNotBlank() && !generating && canSend && !voiceState.listening && !voiceState.transcribing,
                             onClick = {
                                 val input = message.trim()
+                                lastUserMessage = input
                                 message = ""
                                 generating = true
                                 state = AgentState.ACTING

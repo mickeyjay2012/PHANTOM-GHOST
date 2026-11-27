@@ -38,17 +38,29 @@ import com.phantom.ghost.audio.WhisperModelManager
 import com.phantom.ghost.model.ModelManager
 import com.phantom.ghost.model.ModelStatus
 import com.phantom.ghost.voice.MainAssistantViewModel
+import com.phantom.ghost.memory.EmbeddingEngine
+import com.phantom.ghost.memory.LocalMemoryManager
+import com.phantom.ghost.memory.ProfileManager
+import com.phantom.ghost.memory.MemoryWorkerScheduler
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import androidx.lifecycle.lifecycleScope
 import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val profileManager = ProfileManager(applicationContext)
+        val embeddingEngine = EmbeddingEngine(applicationContext)
+        val memoryManager = LocalMemoryManager(applicationContext, embeddingEngine, profileManager)
+        lifecycleScope.launch(Dispatchers.IO) { runCatching { embeddingEngine.initialize() } }
+        if (profileManager.autoLearnEnabled) MemoryWorkerScheduler.schedule(applicationContext)
         val engine = LlamaEngine(
             tokenCounter = TokenCounter { text -> (text.length / 4).coerceAtLeast(1) },
             summarizer = ConversationSummarizer { turns ->
                 turns.joinToString(" ") { "${it.role}: ${it.content}" }.take(1400)
-            }
+            },
+            memoryManager = memoryManager
         )
         val models = ModelManager(applicationContext)
         val actionExecutor = ActionExecutor(applicationContext)
@@ -58,14 +70,14 @@ class MainActivity : ComponentActivity() {
         val voiceVm = ViewModelProvider(this, object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                MainAssistantViewModel(engine, WhisperEngine(), WhisperModelManager(applicationContext), AudioRecorder(), piper, voiceDirectory) as T
+                MainAssistantViewModel(engine, WhisperEngine(), WhisperModelManager(applicationContext), AudioRecorder(), piper, voiceDirectory, memoryManager) as T
         })[MainAssistantViewModel::class.java]
-        setContent { PhantomGhostApp(engine, models, voiceVm, actionExecutor, proactiveMonitor) }
+        setContent { PhantomGhostApp(engine, models, voiceVm, actionExecutor, proactiveMonitor, memoryManager, profileManager) }
     }
 }
 
 @Composable
-private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voiceVm: MainAssistantViewModel, actionExecutor: ActionExecutor, proactiveMonitor: ProactiveMonitor) {
+private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voiceVm: MainAssistantViewModel, actionExecutor: ActionExecutor, proactiveMonitor: ProactiveMonitor, memoryManager: LocalMemoryManager, profileManager: ProfileManager) {
     val context = LocalContext.current
     val modelStatus by modelManager.modelState.collectAsState()
     val downloadProgress by modelManager.downloadProgress.collectAsState()
@@ -116,9 +128,14 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                             onSend={input, mode -> engine.generateResponse(input, mode)},
                             onPlanCandidate={ raw ->
                                 GhostPlanParser.parse(raw)?.let { plan -> pendingPlan = plan; showAction = true }
-                            }
+                            },
+                            onPinMessage={ voiceVm.pinMessage(it) },
+                            snackbarMessage=voiceState.snackbarMessage,
+                            onSnackbarConsumed={ voiceVm.consumeSnackbar() }
                         )
-                        PhantomScreen.MEMORY -> MemoryProfileScreen()
+                        PhantomScreen.MEMORY -> MemoryVaultScreen(memoryManager, profileManager) { enabled ->
+                            if (enabled) MemoryWorkerScheduler.schedule(context) else MemoryWorkerScheduler.cancel(context)
+                        } onRunNow={ MemoryWorkerScheduler.runNow(context) }
                         PhantomScreen.MODELS -> ModelManagerScreen(
                             status=modelStatus, progress=downloadProgress, error=modelError,
                             whisperModelLabel=voiceState.activeWhisperModel,

@@ -104,6 +104,16 @@ Java_com_phantom_ghost_ai_NativeBridge_nativeLoadLlama(JNIEnv *env, jobject, jst
 #endif
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_phantom_ghost_ai_NativeBridge_nativeUnloadLlama(JNIEnv *, jobject) {
+#if defined(PHANTOM_LLAMA_AVAILABLE)
+    std::lock_guard<std::mutex> guard(llamaMutex);
+    cancelGeneration.store(true);
+    if (context) { llama_free(context); context = nullptr; }
+    if (model) { llama_model_free(model); model = nullptr; }
+#endif
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_phantom_ghost_ai_NativeBridge_nativeGenerate(
         JNIEnv *env, jobject receiver, jstring prompt, jint maxTokens,

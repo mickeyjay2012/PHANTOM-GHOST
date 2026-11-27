@@ -1,5 +1,7 @@
 package com.phantom.ghost.ai
 
+import com.phantom.ghost.memory.MemoryChunk
+
 enum class PersonaMode { STANDARD, UNRESTRICTED }
 
 class PersonaManager(private val ghostName: String = "Phantom") {
@@ -9,6 +11,8 @@ class PersonaManager(private val ghostName: String = "Phantom") {
             Be balanced, polite, clear, and comprehensive. Explain uncertainty and distinguish
             verified facts from estimates. Give practical options and relevant trade-offs.
             Follow all applicable safety, privacy, consent, and permission requirements.
+            When LONG-TERM MEMORY contains relevant facts, use them naturally. Do not claim
+            certainty beyond the supplied facts and do not mention that you are remembering them.
         """.trimIndent()
         PersonaMode.UNRESTRICTED -> """
             You are PHANTOM GHOST, an advanced local AI assistant.
@@ -29,14 +33,27 @@ class PersonaManager(private val ghostName: String = "Phantom") {
             A plan is a proposal, not permission. Never execute until the user reviews and
             confirms the complete plan. Never imply an intent dispatch means the external task
             succeeded. Safety, privacy, consent, and Android permission boundaries always apply.
+            When LONG-TERM MEMORY contains relevant facts, use them naturally and accurately.
         """.trimIndent()
     }
 
-    fun buildFullContext(userInput: String, mode: PersonaMode, contextSummary: String? = null): String =
-        buildString {
-            append("System: ").append(getActiveSystemPrompt(mode)).append('\n')
-            if (!contextSummary.isNullOrBlank()) append("Context Summary: ").append(contextSummary).append('\n')
-            append("User: ").append(userInput.trim()).append('\n')
-            append("Assistant:")
+    fun buildFullContext(
+        userInput: String,
+        mode: PersonaMode,
+        contextSummary: String? = null,
+        memories: List<MemoryChunk> = emptyList(),
+        history: List<ChatTurn> = emptyList()
+    ): String = buildString {
+        append("System: ").append(getActiveSystemPrompt(mode)).append('\n')
+        if (memories.isNotEmpty()) {
+            append("### LONG-TERM MEMORY:\n")
+            memories.forEach { append("- [").append(it.content.replace('\n', ' ')).append("]\n") }
         }
+        if (!contextSummary.isNullOrBlank()) append("Context Summary: ").append(contextSummary).append('\n')
+        history.forEach { append(it.role).append(": ").append(it.content).append('\n') }
+        if (history.isEmpty() || history.last().role != "user" || history.last().content != userInput.trim()) {
+            append("User: ").append(userInput.trim()).append('\n')
+        }
+        append("Assistant:")
+    }
 }

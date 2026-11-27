@@ -1,7 +1,11 @@
 package com.phantom.ghost.ai
 
+import com.phantom.ghost.memory.LocalMemoryManager
+import com.phantom.ghost.memory.MemoryChunk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.collect
@@ -23,11 +27,13 @@ data class GenerationConfig(
 }
 
 data class ChatTurn(val role: String, val content: String)
+data class MemoryRecallEvent(val type: String = "MEMORY_RETRIEVED", val facts: List<String>, val scores: List<Float>)
 fun interface TokenCounter { suspend fun count(text: String): Int }
 fun interface ConversationSummarizer { suspend fun summarize(messages: List<ChatTurn>): String }
 interface LlamaNative {
     fun loadModel(path: String): Boolean
     fun generate(prompt: String, config: GenerationConfig): Flow<String>
+    fun unloadModel()
 }
 
 class LlamaEngine(
@@ -35,17 +41,26 @@ class LlamaEngine(
     private val tokenCounter: TokenCounter,
     private val summarizer: ConversationSummarizer,
     private val personaManager: PersonaManager = PersonaManager(),
-    private val persistArchived: suspend (List<ChatTurn>) -> Unit = {}
+    private val persistArchived: suspend (List<ChatTurn>) -> Unit = {},
+    private val memoryManager: LocalMemoryManager? = null
 ) {
     private val mutex = Mutex()
     private val history = mutableListOf<ChatTurn>()
     private var loaded = false
     private var userTurnsSinceSummary = 0
     private var contextSummary: String? = null
+    private val mutableMemoryEvents = MutableSharedFlow<MemoryRecallEvent>(extraBufferCapacity = 16)
+    val memoryEvents = mutableMemoryEvents.asSharedFlow()
 
     suspend fun load(modelPath: String) = mutex.withLock {
         check(native.loadModel(modelPath)) { "Native Llama runtime unavailable or model failed to load." }
         loaded = true
+    }
+
+    /** Releases native model/context memory; used by headless jobs before loading ONNX. */
+    suspend fun unloadModel() = mutex.withLock {
+        if (loaded) native.unloadModel()
+        loaded = false
     }
 
     fun generateResponse(
@@ -57,30 +72,43 @@ class LlamaEngine(
         mutex.lock()
         try {
             check(loaded) { "No verified local model is loaded. Install and verify a model first." }
+
+            // Scoped retrieval happens before every inference. A failed recall lookup is non-fatal.
+            val memories: List<MemoryChunk> = runCatching {
+                memoryManager?.searchContext(userInput.trim(), 3).orEmpty()
+            }.getOrDefault(emptyList())
+            if (memories.isNotEmpty()) {
+                mutableMemoryEvents.emit(
+                    MemoryRecallEvent(facts = memories.map { it.content }, scores = memories.map { it.similarity })
+                )
+            }
+
             history += ChatTurn("user", userInput.trim())
+            memoryManager?.recordEligibleTurn("user", userInput.trim())
             userTurnsSinceSummary++
             compact(config.contextTokens, force = userTurnsSinceSummary >= 5)
 
-            val prompt = buildString {
-                append("System: ").append(personaManager.getActiveSystemPrompt(mode)).append('\n')
-                if (!contextSummary.isNullOrBlank()) {
-                    append("Context Summary: ").append(contextSummary).append('\n')
-                }
-                history.forEach { append(it.role).append(": ").append(it.content).append('\n') }
-                append("assistant:")
-            }
+            val prompt = personaManager.buildFullContext(
+                userInput = userInput,
+                mode = mode,
+                contextSummary = contextSummary,
+                memories = memories,
+                history = history
+            )
             val response = StringBuilder()
             native.generate(prompt, config).collect { fragment ->
                 response.append(fragment)
                 emit(fragment)
             }
-            if (response.isNotEmpty()) history += ChatTurn("assistant", response.toString())
+            if (response.isNotEmpty()) {
+                history += ChatTurn("assistant", response.toString())
+                memoryManager?.recordEligibleTurn("assistant", response.toString())
+            }
         } finally {
             mutex.unlock()
         }
     }.flowOn(Dispatchers.IO)
 
-    /** Backward-compatible Standard-mode entry point. */
     fun stream(userText: String, config: GenerationConfig = GenerationConfig()): Flow<String> =
         generateResponse(userText, PersonaMode.STANDARD, config)
 
@@ -96,11 +124,8 @@ class LlamaEngine(
         userTurnsSinceSummary = 0
     }
 
-    /** Adds verified tool-dispatch observations to the next model context. */
     suspend fun recordToolObservations(observations: List<String>) = mutex.withLock {
-        observations.take(5).forEach { observation ->
-            history += ChatTurn("tool", observation.take(500))
-        }
+        observations.take(5).forEach { history += ChatTurn("tool", it.take(500)) }
     }
 
     suspend fun reset() = mutex.withLock {
@@ -113,5 +138,6 @@ class LlamaEngine(
         override fun loadModel(path: String) = NativeBridge.loadModel(path)
         override fun generate(prompt: String, config: GenerationConfig) =
             NativeBridge.generate(prompt, config.maxTokens, config.temperature, config.topP, config.repeatPenalty)
+        override fun unloadModel() = NativeBridge.unloadLlamaModel()
     }
 }
