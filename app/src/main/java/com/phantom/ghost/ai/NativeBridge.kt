@@ -14,15 +14,23 @@ object NativeBridge {
     private val loadError: Throwable? = runCatching { System.loadLibrary("phantom_native") }.exceptionOrNull()
     private val loaded get() = loadError == null
     private val activeSink = AtomicReference<SendChannel<String>?>(null)
+    @Volatile private var loadedLlamaPath: String? = null
 
     fun runtimeStatus(): String = if (loaded) runCatching { nativeRuntimeStatus() }
         .getOrElse { "Native JNI entry point unavailable: ${it.javaClass.simpleName}" }
     else "Native runtime unavailable: ${loadError?.javaClass?.simpleName ?: "load error"}"
 
-    fun loadModel(path: String): Boolean = loaded && nativeLoadLlama(path)
+    fun loadModel(path: String): Boolean {
+        if (!loaded) return false
+        val success = runCatching { nativeLoadLlama(path) }.getOrDefault(false)
+        loadedLlamaPath = if (success) path else null
+        return success
+    }
+    fun isLlamaModelLoaded(path: String): Boolean = loadedLlamaPath == path
     fun unloadLlamaModel() {
         check(activeSink.get() == null) { "Cannot unload Llama during generation." }
         if (loaded) nativeUnloadLlama()
+        loadedLlamaPath = null
     }
     fun loadWhisperModel(path: String): Boolean = loaded && runCatching { nativeLoadWhisper(path) }.getOrDefault(false)
 

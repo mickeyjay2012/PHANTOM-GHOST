@@ -26,12 +26,16 @@ class EmbeddingEngine(context: Context) : LocalEmbedder, AutoCloseable {
     private val client = OkHttpClient()
     private var session: OrtSession? = null
     private var tokenizer: WordPieceTokenizer? = null
+    private var assetsVerified = false
     private val env = OrtEnvironment.getEnvironment()
 
     suspend fun initialize() = withContext(Dispatchers.IO) {
         if (session != null) return@withContext
-        ensureFile(modelFile, MODEL_URL, MODEL_SHA256)
-        ensureFile(vocabFile, VOCAB_URL, VOCAB_SHA256)
+        if (!assetsVerified) {
+            ensureFile(modelFile, MODEL_URL, MODEL_SHA256)
+            ensureFile(vocabFile, VOCAB_URL, VOCAB_SHA256)
+            assetsVerified = true
+        }
         tokenizer = WordPieceTokenizer(vocabFile)
         session = env.createSession(modelFile.absolutePath, OrtSession.SessionOptions())
     }

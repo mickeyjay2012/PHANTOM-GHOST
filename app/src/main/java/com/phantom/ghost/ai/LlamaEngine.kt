@@ -33,6 +33,7 @@ fun interface ConversationSummarizer { suspend fun summarize(messages: List<Chat
 interface LlamaNative {
     fun loadModel(path: String): Boolean
     fun generate(prompt: String, config: GenerationConfig): Flow<String>
+    fun isModelLoaded(path: String): Boolean
     fun unloadModel()
 }
 
@@ -47,6 +48,7 @@ class LlamaEngine(
     private val mutex = Mutex()
     private val history = mutableListOf<ChatTurn>()
     private var loaded = false
+    private var loadedModelPath: String? = null
     private var userTurnsSinceSummary = 0
     private var contextSummary: String? = null
     private val mutableMemoryEvents = MutableSharedFlow<MemoryRecallEvent>(extraBufferCapacity = 16)
@@ -54,6 +56,7 @@ class LlamaEngine(
 
     suspend fun load(modelPath: String) = mutex.withLock {
         check(native.loadModel(modelPath)) { "Native Llama runtime unavailable or model failed to load." }
+        loadedModelPath = modelPath
         loaded = true
     }
 
@@ -61,6 +64,7 @@ class LlamaEngine(
     suspend fun unloadModel() = mutex.withLock {
         if (loaded) native.unloadModel()
         loaded = false
+        loadedModelPath = null
     }
 
     fun generateResponse(
@@ -72,6 +76,12 @@ class LlamaEngine(
         mutex.lock()
         try {
             check(loaded) { "No verified local model is loaded. Install and verify a model first." }
+            val modelPath = checkNotNull(loadedModelPath) { "The loaded model path is unavailable." }
+            // A headless WorkManager run may have unloaded the process-wide JNI model while
+            // this Activity engine remained alive. Rehydrate it before the next user inference.
+            if (!native.isModelLoaded(modelPath)) {
+                check(native.loadModel(modelPath)) { "The local Llama model could not be reloaded after background memory work." }
+            }
 
             // Scoped retrieval happens before every inference. A failed recall lookup is non-fatal.
             val memories: List<MemoryChunk> = runCatching {
@@ -138,6 +148,7 @@ class LlamaEngine(
         override fun loadModel(path: String) = NativeBridge.loadModel(path)
         override fun generate(prompt: String, config: GenerationConfig) =
             NativeBridge.generate(prompt, config.maxTokens, config.temperature, config.topP, config.repeatPenalty)
+        override fun isModelLoaded(path: String) = NativeBridge.isLlamaModelLoaded(path)
         override fun unloadModel() = NativeBridge.unloadLlamaModel()
     }
 }
