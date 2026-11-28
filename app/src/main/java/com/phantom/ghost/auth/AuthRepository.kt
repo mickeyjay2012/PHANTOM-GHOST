@@ -20,6 +20,7 @@ sealed interface AuthResult {
 interface AuthRepository {
     suspend fun signUp(email: String, password: String, fullName: String, username: String): AuthResult
     suspend fun verifyEmail(email: String, sixDigitCode: String, fullName: String, username: String): AuthResult
+    suspend fun resendVerification(email: String): AuthResult
     suspend fun signIn(email: String, password: String): AuthResult
     suspend fun currentAccessToken(): String?
     suspend fun signOut()
@@ -61,6 +62,13 @@ class SupabaseAuthRepository(
         if (status in 200..299 && body.optString("access_token").isNotBlank()) {
             AuthResult.Authenticated(storeSession(body))
         } else mapError(status, body)
+    }
+
+    override suspend fun resendVerification(email: String): AuthResult = withContext(Dispatchers.IO) {
+        if (!validEmail(email)) return@withContext AuthResult.Failure("INVALID_EMAIL", "Enter a valid email address.")
+        val payload = JSONObject().put("type", "signup").put("email", email.trim())
+        val (status, body) = request("POST", "/auth/v1/resend", payload)
+        if (status in 200..299) AuthResult.VerificationRequired else mapError(status, body)
     }
 
     override suspend fun signIn(email: String, password: String): AuthResult = withContext(Dispatchers.IO) {
