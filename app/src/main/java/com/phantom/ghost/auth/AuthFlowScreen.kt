@@ -100,7 +100,7 @@ fun AuthFlowScreen(
                     label = { Text("Password") }, singleLine = true,
                     visualTransformation = PasswordVisualTransformation())
             }
-            if (!error.isNullOrBlank()) Text(error!!, color = PhantomColors.Error, fontSize = 12.sp)
+            if (!error.isNullOrBlank()) Text(error!!, color = PhantomColors.AlertRed, fontSize = 12.sp)
             if (!info.isNullOrBlank()) Text(info!!, color = PhantomColors.GhostCyan, fontSize = 12.sp)
             Spacer(Modifier.height(8.dp))
             if (busy) {
