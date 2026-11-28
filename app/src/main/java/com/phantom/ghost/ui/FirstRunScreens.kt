@@ -44,7 +44,7 @@ fun GhostNameSetupScreen(onContinue: (String) -> Unit) {
         Spacer(Modifier.height(24.dp))
         PhantomBrandHeader()
         Spacer(Modifier.height(16.dp))
-        SetupSetupScreenTitle("IDENTITY / PERSONALIZATION", "Name your Ghost", "Choose the name you want your assistant to use.")
+        SetupScreenTitle("IDENTITY / PERSONALIZATION", "Name your Ghost", "Choose the name you want your assistant to use.")
         Spacer(Modifier.height(20.dp))
         GlassCard(Modifier.fillMaxWidth()) {
             OutlinedTextField(
