@@ -16,6 +16,9 @@ jobs:
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      # Supabase publishable keys are intended for client-side use; RLS protects user data.
+      SUPABASE_URL: https://nkvkgnhmearznzwkabev.supabase.co
+      SUPABASE_ANON_KEY: sb_publishable_EvBlg8MRsZr_cNXMrzHv1A_maivtDLK
 
     steps:
       - name: Checkout
