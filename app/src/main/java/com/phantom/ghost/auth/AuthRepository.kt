@@ -18,8 +18,8 @@ sealed interface AuthResult {
 }
 
 interface AuthRepository {
-    suspend fun signUp(email: String, password: String): AuthResult
-    suspend fun verifyEmail(email: String, sixDigitCode: String): AuthResult
+    suspend fun signUp(email: String, password: String, fullName: String, username: String): AuthResult
+    suspend fun verifyEmail(email: String, sixDigitCode: String, fullName: String, username: String): AuthResult
     suspend fun signIn(email: String, password: String): AuthResult
     suspend fun currentAccessToken(): String?
     suspend fun signOut()
@@ -37,18 +37,22 @@ class SupabaseAuthRepository(
     private val mediaType = "application/json; charset=utf-8".toMediaType()
     private fun configured() = baseUrl.startsWith("https://") && anonKey.isNotBlank()
 
-    override suspend fun signUp(email: String, password: String): AuthResult = withContext(Dispatchers.IO) {
+    override suspend fun signUp(email: String, password: String, fullName: String, username: String): AuthResult = withContext(Dispatchers.IO) {
         if (!configured()) return@withContext AuthResult.Failure("NOT_CONFIGURED", "Configure SUPABASE_URL and SUPABASE_ANON_KEY.")
         if (!validEmail(email)) return@withContext AuthResult.Failure("INVALID_EMAIL", "Enter a valid email address.")
         if (password.length < 10) return@withContext AuthResult.Failure("WEAK_PASSWORD", "Use at least 10 characters.")
-        val (status, body) = request("POST", "/auth/v1/signup", JSONObject().put("email", email.trim()).put("password", password))
+        if (fullName.isBlank() || fullName.length > 80) return@withContext AuthResult.Failure("INVALID_NAME", "Enter your full name.")
+        if (!username.matches(Regex("^[A-Za-z0-9_]{3,24}$"))) return@withContext AuthResult.Failure("INVALID_USERNAME", "Username must be 3–24 characters using letters, numbers or underscores.")
+        val metadata = JSONObject().put("full_name", fullName.trim()).put("username", username.lowercase())
+        val payload = JSONObject().put("email", email.trim()).put("password", password).put("data", metadata)
+        val (status, body) = request("POST", "/auth/v1/signup", payload)
         if (status in 200..299) {
             if (body.optString("access_token").isNotBlank()) AuthResult.Authenticated(storeSession(body))
             else AuthResult.VerificationRequired
         } else mapError(status, body)
     }
 
-    override suspend fun verifyEmail(email: String, sixDigitCode: String): AuthResult = withContext(Dispatchers.IO) {
+    override suspend fun verifyEmail(email: String, sixDigitCode: String, fullName: String, username: String): AuthResult = withContext(Dispatchers.IO) {
         if (!sixDigitCode.matches(Regex("^\\d{6}$"))) {
             return@withContext AuthResult.Failure("INVALID_VERIFICATION_CODE", "The code must contain exactly six digits.")
         }
