@@ -44,7 +44,7 @@ fun GhostNameSetupScreen(onContinue: (String) -> Unit) {
         Spacer(Modifier.height(24.dp))
         PhantomBrandHeader()
         Spacer(Modifier.height(16.dp))
-        ScreenTitle("IDENTITY / PERSONALIZATION", "Name your Ghost", "Choose the name you want your assistant to use.")
+        SetupScreenTitle("IDENTITY / PERSONALIZATION", "Name your Ghost", "Choose the name you want your assistant to use.")
         Spacer(Modifier.height(20.dp))
         GlassCard(Modifier.fillMaxWidth()) {
             OutlinedTextField(
@@ -177,5 +177,14 @@ fun PersonalAddressSetupScreen(onContinue: (String, String) -> Unit) {
 private fun TextButtonLike(label: String, onClick: () -> Unit) {
     androidx.compose.material3.TextButton(onClick = onClick) {
         Text(label, color = PhantomColors.Muted)
+    }
+}
+
+@Composable
+private fun SetupScreenTitle(kicker: String, title: String, subtitle: String? = null) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(kicker, style = PhantomType.label, color = PhantomColors.GhostCyan, textAlign = TextAlign.Center)
+        Text(title, color = PhantomColors.GhostWhite, fontSize = 24.sp, textAlign = TextAlign.Center)
+        if (subtitle != null) Text(subtitle, color = PhantomColors.Muted, fontSize = 13.sp, textAlign = TextAlign.Center)
     }
 }
