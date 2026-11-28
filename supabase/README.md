@@ -29,3 +29,9 @@ The Android client calls Supabase Auth signup and verifies a six-digit code usin
 5. Save and test with an email address you control.
 
 The Android app includes a resend-code action. Actual delivery depends on the project's configured email provider and rate limits.
+
+## Email delivery for real users
+
+Supabase's built-in SMTP service is restricted to pre-authorized team email addresses and is intended for testing. Before public account registration, the project owner must configure a custom SMTP provider under **Authentication → SMTP Settings**. Keep the SMTP password in Supabase's protected settings; never put it in the Android app or GitHub repository.
+
+See the official [Supabase custom SMTP guide](https://supabase.com/docs/guides/auth/auth-smtp).
