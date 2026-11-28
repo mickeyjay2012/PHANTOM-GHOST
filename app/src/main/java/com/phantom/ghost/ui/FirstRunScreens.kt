@@ -188,3 +188,56 @@ private fun SetupScreenTitle(kicker: String, title: String, subtitle: String? = 
         if (subtitle != null) Text(subtitle, color = PhantomColors.Muted, fontSize = 13.sp, textAlign = TextAlign.Center)
     }
 }
+
+@Composable
+fun GhostSettingsScreen(
+    profileManager: com.phantom.ghost.memory.ProfileManager,
+    onSave: (String, String, String, Boolean) -> Unit,
+    onSignOut: () -> Unit
+) {
+    var ghostName by remember { mutableStateOf(profileManager.ghostName) }
+    var preferredName by remember { mutableStateOf(profileManager.preferredName) }
+    var selfReference by remember { mutableStateOf(profileManager.selfReference) }
+    var handsFree by remember { mutableStateOf(profileManager.handsFreeRequested) }
+    Column(
+        Modifier.fillMaxSize().background(PhantomColors.PhantomBlack)
+            .verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        PhantomBrandHeader(compact = true)
+        SetupScreenTitle("CONTROL CENTER", "Ghost settings", "Manage your local assistant preferences.")
+        GlassCard(Modifier.fillMaxWidth()) {
+            Text("ASSISTANT IDENTITY", style = PhantomType.label, color = PhantomColors.PhantomPurple)
+            OutlinedTextField(ghostName, { ghostName = it.take(32) }, Modifier.fillMaxWidth(),
+                label = { Text("Ghost name") }, singleLine = true)
+            OutlinedTextField(preferredName, { preferredName = it.take(40) }, Modifier.fillMaxWidth(),
+                label = { Text("What Ghost calls you") }, singleLine = true)
+            OutlinedTextField(selfReference, { selfReference = it.take(40) }, Modifier.fillMaxWidth(),
+                label = { Text("Your self-reference (optional)") }, singleLine = true)
+        }
+        GlassCard(Modifier.fillMaxWidth()) {
+            Text("VOICE & AVAILABILITY", style = PhantomType.label, color = PhantomColors.PhantomPurple)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Hands-free mode preference", color = PhantomColors.GhostWhite)
+                    Text("Preference only. Background wake-word listening is not active yet.", color = PhantomColors.Muted, fontSize = 11.sp)
+                }
+                androidx.compose.material3.Switch(checked = handsFree, onCheckedChange = { handsFree = it })
+            }
+            Text(
+                if (profileManager.voiceInputEnabled) "Microphone permission: granted" else "Microphone permission: not enabled",
+                color = PhantomColors.Muted, fontSize = 12.sp
+            )
+            Text(
+                "Speaker identity enrollment and a custom voice profile are not connected yet. No voice biometric is stored or uploaded.",
+                color = PhantomColors.Muted, fontSize = 11.sp
+            )
+        }
+        PhantomButton("SAVE SETTINGS", Modifier.fillMaxWidth(), enabled = ghostName.isNotBlank() && preferredName.isNotBlank()) {
+            onSave(ghostName.trim(), preferredName.trim(), selfReference.trim(), handsFree)
+        }
+        androidx.compose.material3.TextButton(onClick = onSignOut, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+            Text("SIGN OUT", color = PhantomColors.AlertRed)
+        }
+    }
+}
