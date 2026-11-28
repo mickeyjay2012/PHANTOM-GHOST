@@ -39,7 +39,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
-enum class PhantomScreen { ONBOARDING, VOICE, ASSISTANT, MEMORY, MODELS }
+enum class PhantomScreen { ONBOARDING, VOICE, ASSISTANT, MEMORY, MODELS, SETTINGS }
 enum class AgentState { IDLE, LISTENING, ACTING }
 enum class ThoughtKind { THOUGHT, ACTION, OBSERVATION }
 
@@ -181,6 +181,7 @@ fun MainAssistantScreen(
     onConfirmAction: () -> Unit,
     onOpenMemory: () -> Unit,
     onOpenModels: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     canSend: Boolean = true,
     modelStatusLabel: String = "MODEL STATUS UNKNOWN",
     voiceState: com.phantom.ghost.voice.VoiceUiState = com.phantom.ghost.voice.VoiceUiState(),
@@ -263,6 +264,7 @@ fun MainAssistantScreen(
                 Row(horizontalArrangement=Arrangement.spacedBy(5.dp), modifier=Modifier.fillMaxWidth().padding(bottom=10.dp)) {
                     OutlinedButton(onClick=onOpenMemory,modifier=Modifier.weight(1f)) { Text("MEMORY",fontSize=9.sp) }
                     OutlinedButton(onClick=onOpenModels,modifier=Modifier.weight(1f)) { Text("SYSTEM",fontSize=9.sp) }
+                    OutlinedButton(onClick=onOpenSettings,modifier=Modifier.weight(1f)) { Text("SETTINGS",fontSize=9.sp) }
                     OutlinedButton(onClick=onConfirmAction,modifier=Modifier.weight(1f)) { Text("ACTIONS",fontSize=9.sp) }
                     OutlinedButton(onClick={ if (lastUserMessage.isNotBlank()) onPinMessage(ChatMessage("user", lastUserMessage)) }, enabled=lastUserMessage.isNotBlank(), modifier=Modifier.weight(1f)) { Text("PIN",fontSize=9.sp) }
                 }

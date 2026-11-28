@@ -16,6 +16,9 @@ jobs:
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      # Supabase publishable keys are designed for client use; RLS protects user data.
+      SUPABASE_URL: https://eklwfehokrhnzxjplccv.supabase.co
+      SUPABASE_ANON_KEY: sb_publishable_ns46S8ud2CLYCFdzh5R2lg_Pl0rFuCl
 
     steps:
       - name: Checkout
@@ -50,7 +53,6 @@ jobs:
             "ndk;25.2.9519653" \
             "cmake;3.22.1"
 
-      # This action caches ~/.gradle, including dependency and build caches.
       - name: Set up Gradle and restore Gradle cache
         uses: gradle/actions/setup-gradle@v4
 

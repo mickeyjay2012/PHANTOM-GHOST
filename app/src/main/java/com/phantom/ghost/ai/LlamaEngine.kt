@@ -46,6 +46,10 @@ class LlamaEngine(
     private val memoryManager: LocalMemoryManager? = null
 ) {
     private val mutex = Mutex()
+
+    fun updateGhostName(name: String) = personaManager.setGhostName(name)
+    fun updateUserAddress(preferredName: String, selfReference: String) =
+        personaManager.setUserAddress(preferredName, selfReference)
     private val history = mutableListOf<ChatTurn>()
     private var loaded = false
     private var loadedModelPath: String? = null
