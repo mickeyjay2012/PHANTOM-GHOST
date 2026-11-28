@@ -181,15 +181,6 @@ private fun TextButtonLike(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun SetupSetupScreenTitle(kicker: String, title: String, subtitle: String? = null) {
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(kicker, style = PhantomType.label, color = PhantomColors.GhostCyan, textAlign = TextAlign.Center)
-        Text(title, color = PhantomColors.GhostWhite, fontSize = 24.sp, textAlign = TextAlign.Center)
-        if (subtitle != null) Text(subtitle, color = PhantomColors.Muted, fontSize = 13.sp, textAlign = TextAlign.Center)
-    }
-}
-
-@Composable
 private fun SetupScreenTitle(kicker: String, title: String, subtitle: String? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(kicker, style = PhantomType.label, color = PhantomColors.GhostCyan, textAlign = TextAlign.Center)
