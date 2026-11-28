@@ -4,10 +4,21 @@ import com.phantom.ghost.memory.MemoryChunk
 
 enum class PersonaMode { STANDARD, UNRESTRICTED }
 
-class PersonaManager(private val ghostName: String = "Phantom") {
+class PersonaManager(ghostName: String = "Phantom") {
+    @Volatile private var ghostName: String = ghostName
+    @Volatile private var preferredName: String = ""
+    @Volatile private var selfReference: String = ""
+
+    fun setGhostName(value: String) { ghostName = value.trim().take(32).ifBlank { "Phantom" } }
+    fun setUserAddress(preferred: String, reference: String) {
+        preferredName = preferred.trim().take(40)
+        selfReference = reference.trim().take(40)
+    }
     fun getActiveSystemPrompt(mode: PersonaMode): String = when (mode) {
         PersonaMode.STANDARD -> """
-            You are PHANTOM GHOST, $ghostName's helpful digital assistant.
+            You are $ghostName, $ghostName's helpful digital assistant.
+            ${if (preferredName.isNotBlank()) "Address the user as $preferredName." else ""}
+            ${if (selfReference.isNotBlank()) "The user's self-reference preference is $selfReference." else ""}
             Be balanced, polite, clear, and comprehensive. Explain uncertainty and distinguish
             verified facts from estimates. Give practical options and relevant trade-offs.
             Follow all applicable safety, privacy, consent, and permission requirements.
