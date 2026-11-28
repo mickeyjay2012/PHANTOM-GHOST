@@ -143,6 +143,29 @@ fun AuthFlowScreen(
                     }
                 }
             }
+            if (stage == AuthStage.VERIFY && !busy) {
+                TextButton(
+                    onClick = {
+                        busy = true
+                        error = null
+                        info = null
+                        scope.launch {
+                            try {
+                                when (val result = repository.resendVerification(email)) {
+                                    AuthResult.VerificationRequired -> info = "A new verification code has been requested."
+                                    is AuthResult.Failure -> error = result.message
+                                    is AuthResult.Authenticated -> onAuthenticated(result.session)
+                                }
+                            } catch (failure: Throwable) {
+                                error = failure.message ?: "Could not resend the code."
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) { Text("RESEND CODE", color = PhantomColors.GhostCyan) }
+            }
             TextButton(onClick = {
                 error = null
                 info = null
