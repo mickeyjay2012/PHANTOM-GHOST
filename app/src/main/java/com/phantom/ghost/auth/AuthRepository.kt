@@ -88,9 +88,12 @@ class SupabaseAuthRepository(
         )
         if (status in 200..299 && body.optString("access_token").isNotBlank()) {
             storeSession(body).accessToken
-        } else {
+        } else if (status in 400..499) {
             sessions.clear()
             null
+        } else {
+            // Preserve the encrypted local session during transient network/server failures.
+            old.accessToken
         }
     }
 
