@@ -156,6 +156,7 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                             onConfirmAction={showAction=true},
                             onOpenMemory={screen=PhantomScreen.MEMORY},
                             onOpenModels={screen=PhantomScreen.MODELS},
+                            onOpenSettings={screen=PhantomScreen.SETTINGS},
                             canSend = modelStatus == ModelStatus.LOADED || modelStatus == ModelStatus.ACTIVE,
                             modelStatusLabel = when (modelStatus) {
                                 ModelStatus.NOT_FOUND -> "Model not installed · open SYSTEM"
@@ -188,6 +189,25 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                             },
                             onRunNow = { MemoryWorkerScheduler.runNow(context) }
                         )
+                        PhantomScreen.SETTINGS -> GhostSettingsScreen(
+                            profileManager = profileManager,
+                            onSave = { ghost, preferred, reference, handsFree ->
+                                profileManager.ghostName = ghost
+                                profileManager.preferredName = preferred
+                                profileManager.selfReference = reference
+                                profileManager.handsFreeRequested = handsFree
+                                engine.updateGhostName(ghost)
+                                engine.updateUserAddress(preferred, reference)
+                            },
+                            onSignOut = {
+                                scope.launch {
+                                    authRepository.signOut()
+                                    profileManager.onboardingComplete = false
+                                    firstRunStage = FirstRunStage.AUTH
+                                    screen = PhantomScreen.ASSISTANT
+                                }
+                            }
+                        )
                         PhantomScreen.MODELS -> ModelManagerScreen(
                             status=modelStatus, progress=downloadProgress, error=modelError,
                             whisperModelLabel=voiceState.activeWhisperModel,
@@ -214,7 +234,8 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                             Triple(PhantomScreen.VOICE,"VOICE","◉"),
                             Triple(PhantomScreen.ASSISTANT,"GHOST","✧"),
                             Triple(PhantomScreen.MEMORY,"MEMORY","◇"),
-                            Triple(PhantomScreen.MODELS,"SYSTEM","▦")
+                            Triple(PhantomScreen.MODELS,"SYSTEM","▦"),
+                            Triple(PhantomScreen.SETTINGS,"SETTINGS","⚙")
                         ).forEach { (target,label,icon) ->
                             NavigationBarItem(selected=screen==target,onClick={screen=target},
                                 icon={Text(icon,color=if(screen==target) PhantomColors.GhostCyan else PhantomColors.Muted)},
