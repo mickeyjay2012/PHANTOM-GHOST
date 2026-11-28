@@ -123,6 +123,7 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                             FirstRunStage.AUTH -> AuthFlowScreen(authRepository) { firstRunStage = FirstRunStage.NAME_GHOST }
                             FirstRunStage.NAME_GHOST -> GhostNameSetupScreen { name ->
                                 profileManager.ghostName = name
+                                engine.updateGhostName(name)
                                 firstRunStage = FirstRunStage.LOGO_REVEAL
                             }
                             FirstRunStage.LOGO_REVEAL -> PhantomLogoRevealScreen { firstRunStage = FirstRunStage.VOICE_SETUP }
@@ -142,6 +143,7 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                             FirstRunStage.PERSONALIZE -> PersonalAddressSetupScreen { preferred, reference ->
                                 profileManager.preferredName = preferred
                                 profileManager.selfReference = reference
+                                engine.updateUserAddress(preferred, reference)
                                 profileManager.onboardingComplete = true
                                 firstRunStage = FirstRunStage.COMPLETE
                             }
