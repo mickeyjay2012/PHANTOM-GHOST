@@ -44,7 +44,7 @@ fun GhostNameSetupScreen(onContinue: (String) -> Unit) {
         Spacer(Modifier.height(24.dp))
         PhantomBrandHeader()
         Spacer(Modifier.height(16.dp))
-        SetupScreenTitle("IDENTITY / PERSONALIZATION", "Name your Ghost", "Choose the name you want your assistant to use.")
+        SetupSetupScreenTitle("IDENTITY / PERSONALIZATION", "Name your Ghost", "Choose the name you want your assistant to use.")
         Spacer(Modifier.height(20.dp))
         GlassCard(Modifier.fillMaxWidth()) {
             OutlinedTextField(
@@ -100,7 +100,7 @@ fun VoiceSetupChoiceScreen(
     ) {
         WaveformIcon(Modifier.size(150.dp))
         Spacer(Modifier.height(20.dp))
-        ScreenTitle("VOICE / INPUT", "Set up voice", "Allow microphone access so you can speak to your assistant.")
+        SetupScreenTitle("VOICE / INPUT", "Set up voice", "Allow microphone access so you can speak to your assistant.")
         Spacer(Modifier.height(16.dp))
         GlassCard(Modifier.fillMaxWidth()) {
             Text("Voice input", color = PhantomColors.GhostWhite)
@@ -122,7 +122,7 @@ fun AlwaysAvailableSetupScreen(onChoice: (Boolean) -> Unit) {
     ) {
         PhantomOrb(116.dp, AgentState.LISTENING, loading = true)
         Spacer(Modifier.height(20.dp))
-        ScreenTitle("HANDS-FREE MODE", "Should Ghost stay available?", "An advanced assistant experience — with clear Android limits.")
+        SetupScreenTitle("HANDS-FREE MODE", "Should Ghost stay available?", "An advanced assistant experience — with clear Android limits.")
         Spacer(Modifier.height(14.dp))
         GlassCard(Modifier.fillMaxWidth()) {
             Text("What this means", color = PhantomColors.GhostWhite)
@@ -154,7 +154,7 @@ fun PersonalAddressSetupScreen(onContinue: (String, String) -> Unit) {
     ) {
         PhantomOrb(104.dp)
         Spacer(Modifier.height(18.dp))
-        ScreenTitle("PERSONALIZATION", "How should Ghost address you?", "These preferences stay on this device and can be changed later.")
+        SetupScreenTitle("PERSONALIZATION", "How should Ghost address you?", "These preferences stay on this device and can be changed later.")
         Spacer(Modifier.height(16.dp))
         GlassCard(Modifier.fillMaxWidth()) {
             OutlinedTextField(
@@ -177,6 +177,15 @@ fun PersonalAddressSetupScreen(onContinue: (String, String) -> Unit) {
 private fun TextButtonLike(label: String, onClick: () -> Unit) {
     androidx.compose.material3.TextButton(onClick = onClick) {
         Text(label, color = PhantomColors.Muted)
+    }
+}
+
+@Composable
+private fun SetupSetupScreenTitle(kicker: String, title: String, subtitle: String? = null) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(kicker, style = PhantomType.label, color = PhantomColors.GhostCyan, textAlign = TextAlign.Center)
+        Text(title, color = PhantomColors.GhostWhite, fontSize = 24.sp, textAlign = TextAlign.Center)
+        if (subtitle != null) Text(subtitle, color = PhantomColors.Muted, fontSize = 13.sp, textAlign = TextAlign.Center)
     }
 }
 
