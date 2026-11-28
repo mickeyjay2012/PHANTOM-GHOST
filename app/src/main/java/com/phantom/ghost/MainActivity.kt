@@ -20,6 +20,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.phantom.ghost.ui.*
+import com.phantom.ghost.auth.AuthFlowScreen
+import com.phantom.ghost.auth.SessionManager
+import com.phantom.ghost.auth.SupabaseAuthRepository
+import com.phantom.ghost.auth.AuthRepository
 import com.phantom.ghost.actions.ActionConfirmationOverlay
 import com.phantom.ghost.actions.ActionExecutor
 import com.phantom.ghost.actions.GhostPlan
@@ -29,6 +33,7 @@ import com.phantom.ghost.ai.LlamaEngine
 import com.phantom.ghost.ai.TokenCounter
 import com.phantom.ghost.ai.ConversationSummarizer
 import com.phantom.ghost.ai.PersonaMode
+import com.phantom.ghost.ai.PersonaManager
 import com.phantom.ghost.audio.AudioRecorder
 import com.phantom.ghost.audio.KotlinPhonemizer
 import com.phantom.ghost.audio.PiperEngine
@@ -49,6 +54,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val profileManager = ProfileManager(applicationContext)
+        val sessionManager = SessionManager(applicationContext)
+        val authRepository = SupabaseAuthRepository(sessionManager)
         val embeddingEngine = EmbeddingEngine(applicationContext)
         val memoryManager = LocalMemoryManager(applicationContext, embeddingEngine, profileManager)
         if (profileManager.autoLearnEnabled) MemoryWorkerScheduler.schedule(applicationContext)
@@ -57,6 +64,7 @@ class MainActivity : ComponentActivity() {
             summarizer = ConversationSummarizer { turns ->
                 turns.joinToString(" ") { "${it.role}: ${it.content}" }.take(1400)
             },
+            personaManager = PersonaManager(profileManager.ghostName),
             memoryManager = memoryManager
         )
         val models = ModelManager(applicationContext)
@@ -69,12 +77,12 @@ class MainActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
                 MainAssistantViewModel(engine, WhisperEngine(), WhisperModelManager(applicationContext), AudioRecorder(), piper, voiceDirectory, memoryManager) as T
         })[MainAssistantViewModel::class.java]
-        setContent { PhantomGhostApp(engine, models, voiceVm, actionExecutor, proactiveMonitor, memoryManager, profileManager) }
+        setContent { PhantomGhostApp(engine, models, voiceVm, actionExecutor, proactiveMonitor, memoryManager, profileManager, authRepository, sessionManager) }
     }
 }
 
 @Composable
-private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voiceVm: MainAssistantViewModel, actionExecutor: ActionExecutor, proactiveMonitor: ProactiveMonitor, memoryManager: LocalMemoryManager, profileManager: ProfileManager) {
+private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voiceVm: MainAssistantViewModel, actionExecutor: ActionExecutor, proactiveMonitor: ProactiveMonitor, memoryManager: LocalMemoryManager, profileManager: ProfileManager, authRepository: AuthRepository, sessionManager: SessionManager) {
     val context = LocalContext.current
     val modelStatus by modelManager.modelState.collectAsState()
     val downloadProgress by modelManager.downloadProgress.collectAsState()
@@ -84,6 +92,17 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
     var pendingPersona by remember { mutableStateOf(PersonaMode.STANDARD) }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) voiceVm.startListening(pendingPersona)
+    }
+    var firstRunStage by remember {
+        mutableStateOf(
+            if (sessionManager.load() != null) {
+                if (profileManager.onboardingComplete) FirstRunStage.COMPLETE else FirstRunStage.NAME_GHOST
+            } else FirstRunStage.AUTH
+        )
+    }
+    val setupMicPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        profileManager.voiceInputEnabled = granted
+        firstRunStage = FirstRunStage.ALWAYS_AVAILABLE
     }
     val proactivePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         val calendarGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
@@ -97,9 +116,38 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
     PhantomDesignSystem {
         Surface(Modifier.fillMaxSize(), color=PhantomColors.PhantomBlack) {
             Column(Modifier.fillMaxSize().background(PhantomColors.PhantomBlack)) {
-                if (screen != PhantomScreen.ASSISTANT && showBanner) SmartNotificationBanner("PHANTOM GHOST is standing by.") { showBanner=false }
+                if (firstRunStage == FirstRunStage.COMPLETE && screen != PhantomScreen.ASSISTANT && showBanner) SmartNotificationBanner("PHANTOM GHOST is standing by.") { showBanner=false }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    when(screen) {
+                    if (firstRunStage != FirstRunStage.COMPLETE) {
+                        when (firstRunStage) {
+                            FirstRunStage.AUTH -> AuthFlowScreen(authRepository) { firstRunStage = FirstRunStage.NAME_GHOST }
+                            FirstRunStage.NAME_GHOST -> GhostNameSetupScreen { name ->
+                                profileManager.ghostName = name
+                                firstRunStage = FirstRunStage.LOGO_REVEAL
+                            }
+                            FirstRunStage.LOGO_REVEAL -> PhantomLogoRevealScreen { firstRunStage = FirstRunStage.VOICE_SETUP }
+                            FirstRunStage.VOICE_SETUP -> VoiceSetupChoiceScreen(
+                                onEnableVoiceInput = {
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                        profileManager.voiceInputEnabled = true
+                                        firstRunStage = FirstRunStage.ALWAYS_AVAILABLE
+                                    } else setupMicPermission.launch(Manifest.permission.RECORD_AUDIO)
+                                },
+                                onSkip = { profileManager.voiceInputEnabled = false; firstRunStage = FirstRunStage.ALWAYS_AVAILABLE }
+                            )
+                            FirstRunStage.ALWAYS_AVAILABLE -> AlwaysAvailableSetupScreen { requested ->
+                                profileManager.handsFreeRequested = requested
+                                firstRunStage = FirstRunStage.PERSONALIZE
+                            }
+                            FirstRunStage.PERSONALIZE -> PersonalAddressSetupScreen { preferred, reference ->
+                                profileManager.preferredName = preferred
+                                profileManager.selfReference = reference
+                                profileManager.onboardingComplete = true
+                                firstRunStage = FirstRunStage.COMPLETE
+                            }
+                            FirstRunStage.COMPLETE -> Unit
+                        }
+                    } else when(screen) {
                         PhantomScreen.ONBOARDING -> OnboardingScreen { screen=PhantomScreen.VOICE }
                         PhantomScreen.VOICE -> VoiceprintEnrollmentScreen { screen=PhantomScreen.ASSISTANT }
                         PhantomScreen.ASSISTANT -> MainAssistantScreen(
@@ -157,7 +205,7 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                         )
                     }
                 }
-                if(screen != PhantomScreen.ASSISTANT) {
+                if(firstRunStage == FirstRunStage.COMPLETE && screen != PhantomScreen.ASSISTANT) {
                     NavigationBar(containerColor=PhantomColors.PhantomCharcoal, tonalElevation=0.dp) {
                         listOf(
                             Triple(PhantomScreen.ONBOARDING,"SETUP","⌂"),
@@ -176,7 +224,7 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
                     }
                 }
             }
-            if (showAction) ActionConfirmationOverlay(
+            if (firstRunStage == FirstRunStage.COMPLETE && showAction) ActionConfirmationOverlay(
                 executor = actionExecutor,
                 plan = pendingPlan,
                 onEnableProactiveMonitor = {
@@ -198,4 +246,8 @@ private fun PhantomGhostApp(engine: LlamaEngine, modelManager: ModelManager, voi
             )
         }
     }
+}
+
+private enum class FirstRunStage {
+    AUTH, NAME_GHOST, LOGO_REVEAL, VOICE_SETUP, ALWAYS_AVAILABLE, PERSONALIZE, COMPLETE
 }
