@@ -1,37 +1,47 @@
-# PHANTOM GHOST Supabase setup
+# PHANTOM GHOST — Supabase setup
 
-Project ref: `nkvkgnhmearznzwkabev`
+Supabase organization: **PHANTOM GHOST TECHNOLOGIES**  
+Project: **༒︎ PHANTOM GHOST༒︎**  
+Project ref: `eklwfehokrhnzxjplccv`  
+Region: `eu-west-1`
 
-## Deployed database
+## Database setup
+
+Migration `create_profiles_rls_and_auth_user_sync` is applied to this project.
+
 - `public.profiles` stores account profile data only.
-- RLS is enabled. A signed-in user can read or update only their own profile.
-- `private.handle_new_user()` creates the profile row from signup metadata in a database trigger.
-- Local assistant memory, model files, voice recordings and voice identity templates are not uploaded to Supabase.
+- Each profile is linked to its Supabase Auth user.
+- Row Level Security is enabled.
+- Authenticated users can read, insert, and update only their own profile.
+- Anonymous users have no profile-table access.
+- `private.handle_new_user()` creates the profile row from signup metadata through an Auth trigger.
+- Local assistant memory, model files, voice recordings, and voice identity templates remain on the device and are not uploaded to Supabase.
 
-The current schema is documented in [schema.sql](./schema.sql).
+The deployed schema is mirrored in [schema.sql](./schema.sql).
 
-## Email verification code setup
+## Android client configuration
 
-The Android client calls Supabase Auth signup and verifies a six-digit code using the `signup` verification type. In the Supabase Dashboard:
+The Android build reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` from Gradle properties or environment variables. The CI workflow on this branch now points to this new project and uses its publishable client key.
+
+Only a Supabase publishable/legacy anon key belongs in a public Android client. Never place a service-role or secret key in the app, GitHub source, or build artifacts.
+
+## Six-digit email verification
+
+The Android client signs up through Supabase Auth and verifies a six-digit code using the `signup` verification type.
+
+In the Supabase Dashboard:
 
 1. Open **Authentication → Email Templates → Confirm signup**.
-2. Set the subject to `PHANTOM GHOST — Verify your email`.
-3. Use the one-time token variable `{{ .Token }}` in the confirmation template. Example:
+2. Use a confirmation template that displays `{{ .Token }}` as the one-time code.
+3. Keep email confirmation enabled under **Authentication → Providers → Email**.
+4. Test signup using an email address you control.
 
-```html
-<h2>Verify your PHANTOM GHOST account</h2>
-<p>Enter this six-digit code in the app:</p>
-<h1>{{ .Token }}</h1>
-<p>If you did not create this account, ignore this email. Never share your code.</p>
-```
+The app includes a resend-code action. Successful database setup does not by itself prove that email delivery is working.
 
-4. In **Authentication → Providers → Email**, keep email confirmation enabled.
-5. Save and test with an email address you control.
+## Email delivery before public registration
 
-The Android app includes a resend-code action. Actual delivery depends on the project's configured email provider and rate limits.
+Supabase's built-in SMTP sender is limited and intended for testing. Configure a trusted custom SMTP provider in the project's **Authentication → SMTP Settings** before relying on delivery to arbitrary users. Keep SMTP credentials only in Supabase's protected settings; never place them in Android or GitHub.
 
-## Email delivery for real users
-
-Supabase's built-in SMTP service is restricted to pre-authorized team email addresses and is intended for testing. Before public account registration, the project owner must configure a custom SMTP provider under **Authentication → SMTP Settings**. Keep the SMTP password in Supabase's protected settings; never put it in the Android app or GitHub repository.
+A parent/guardian may need to help with any provider account or billing setup. The project owner should complete an actual inbox test before treating email verification as production-ready.
 
 See the official [Supabase custom SMTP guide](https://supabase.com/docs/guides/auth/auth-smtp).
